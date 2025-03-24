@@ -1,0 +1,6 @@
+[submodule "frontend"]
+	path = frontend
+	url = https://github.com/Opsord/architecture-evaluator-frontend.git
+[submodule "backend"]
+	path = backend
+	url = https://github.com/Opsord/architecture-evaluator-backend.git
