@@ -33,12 +33,12 @@ docker compose up --build
 
 ```bash
 cd backend/architecture_evaluator_backend && ./mvnw spring-boot:run
-cd frontend/architecture-evaluator-frontend && npm install && npm run dev
+cd frontend/architecture-evaluator-frontend && pnpm install && pnpm dev
 ```
 
 UI: http://localhost:5173 (proxies `/api/orchestrator` to 8080).
 
-There is no root `package.json` or root `pom.xml`. Do not run `mvn` / `npm` from the parent root.
+There is no root `package.json` or root `pom.xml`. Do not run `mvn` / `pnpm` from the parent root.
 
 ## What this repo owns
 

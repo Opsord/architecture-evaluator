@@ -63,13 +63,13 @@ Terminal 2 — UI:
 
 ```sh
 cd frontend/architecture-evaluator-frontend
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 Open **http://localhost:5173**. Vite proxies `/api/orchestrator` to `http://localhost:8080`.
 
-There is no Maven or npm project at this repository root.
+There is no Maven or npm/pnpm project at this repository root.
 
 ## How analysis works
 
