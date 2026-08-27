@@ -1,101 +1,84 @@
-# Architecture Evaluator for Spring Boot Applications
+# Architecture Evaluator
 
-## Description
+Web app that **statically evaluates the architecture of Java / Spring Boot** projects. It computes maintainability-related metrics (size, cyclomatic complexity, coupling, cohesion) and shows them on an interactive **3D dashboard**.
 
-This web application allows automatic evaluation of the architecture of Java applications based on the Spring Boot framework. It provides key maintainability-related metrics and offers an interactive visual interface to analyze the results without requiring advanced knowledge of metric evaluation.
+This repository is the **composition root**: Docker Compose plus two git submodules.
 
-## Main Features
+| Submodule | Repository |
+|-----------|------------|
+| `backend/` | [architecture-evaluator-backend](https://github.com/Opsord/architecture-evaluator-backend) |
+| `frontend/` | [architecture-evaluator-frontend](https://github.com/Opsord/architecture-evaluator-frontend) |
 
-1. **Automated Architectural Analysis:**
+## Features
 
-   - Evaluation of layered architectures in monolithic web applications.
-   - Detection of architectural patterns and design principle violations.
-   - Calculation of quality metrics such as maintainability, coupling, and cohesion.
+- Analyze a **zip upload** or a **public GitHub repository** (`main` branch).
+- Classify types by typical Spring layers (controllers, services, repositories, entities, …).
+- Metrics per class: LOC, methods, statements, approximate McCabe CC, Ca/Ce/instability, LCOM1–5.
+- Explore classes as cubes in a layered 3D scene (no metric expertise required).
 
-2. **Interactive Visual Dashboard:**
+## Scope and limitations
 
-   - Graphical presentation of key metrics in intuitive diagrams.
-   - Enables interactive exploration of results.
+**In scope:** static analysis of monolithic Java / Spring Boot codebases.
 
-3. **Basic Module for Architectural Quality Evaluation:**
+**Out of scope:** other languages/frameworks; microservices topology; runtime or load testing. Very large projects can take minutes and produce large JSON responses.
 
-   - Calculation of metrics such as cyclomatic complexity, coupling, and cohesion.
-   - Automated evaluation of code maintainability.
+GitHub ingest downloads `https://github.com/{owner}/{repo}/archive/refs/heads/main.zip` — repositories whose default branch is not `main` will fail.
 
-4. **Modular and Extensible Design:**
+## Prerequisites
 
-   - Support for integrating new metrics and evaluation criteria.
-   - Adaptability to different projects or research needs.
+- **Docker** and Docker Compose, **or**
+- **JDK 17+** and **Node.js 18+** (20 recommended) for running the submodules directly
 
-5. **Optimized Evaluation Process:**
+## Quick start (Docker)
 
-   - Reduces complexity in analysis and generates results quickly.
-   - Clear and structured presentation of metrics.
+```sh
+git clone --recurse-submodules https://github.com/Opsord/architecture-evaluator.git
+cd architecture-evaluator
+docker compose up --build
+```
 
-6. **Integration with Code Repositories:**
+If you cloned without `--recurse-submodules`:
 
-   - Connects with version control systems such as Git.
-   - Allows evaluation of third-party projects stored in remote repositories.
+```sh
+git submodule update --init --recursive
+```
 
-## Scope and Limitations
+Then open **http://localhost** (frontend on port 80). The backend is on **http://localhost:8080**. The Nginx image proxies `/api/` to the backend service.
 
-- **Scope:**
+Compose build contexts are the nested app folders:
 
-  - Focused on evaluating monolithic applications developed in **Java** using **Spring Boot**.
-  - Static code analysis, concentrating on software structure and design.
+- `backend/architecture_evaluator_backend`
+- `frontend/architecture-evaluator-frontend`
 
-- **Limitations:**
+## Local development (without Docker)
 
-  - Not compatible with other frameworks or languages such as Python or C#.
-  - Does not analyze microservices, serverless, or hybrid architectures.
-  - Does not include dynamic analysis such as runtime or load testing.
-  - Performance may be affected in extremely large projects.
+Terminal 1 — API:
 
-## Product Evaluation
+```sh
+cd backend/architecture_evaluator_backend
+./mvnw spring-boot:run
+```
 
-The system's quality will be evaluated based on functional and non-functional criteria:
+Terminal 2 — UI:
 
-### Functional Aspects
+```sh
+cd frontend/architecture-evaluator-frontend
+pnpm install
+pnpm dev
+```
 
-- Evaluated through **user stories** with clear acceptance criteria.
-- Example:
-  - **Story:** As a user, I want to visualize maintainability metrics on an interactive dashboard.
-  - **Acceptance Criteria:**
-    - The dashboard must display metrics such as cyclomatic complexity and coupling.
-    - The charts must support interactions such as filtering and zooming.
-    - The system must provide visual feedback to the user.
+Open **http://localhost:5173**. Vite proxies `/api/orchestrator` to `http://localhost:8080`.
 
-### Non-Functional Aspects
+There is no Maven or npm/pnpm project at this repository root.
 
-- **Usability:** Measured through **System Usability Scale (SUS)** questionnaires.
-- **Code Quality:**
-  - Evaluated with tools like **SonarQube**.
-  - Maintain technical debt ratio below 5%.
-- **Performance:**
-  - Load and stress tests to measure stability and resource efficiency.
+## How analysis works
 
-## Installation and Usage
+1. Frontend `POST`s to `/api/orchestrator/analyze-upload` or `/analyze-github`.
+2. Backend unpacks the project, prefers `src/main/java`, parses sources, computes metrics.
+3. Frontend stores the JSON in memory and opens the 3D dashboard.
 
-### Prerequisites
-
-- **Java 17+**
-- **Spring Boot 3.x**
-- **Node.js** (for the graphical interface, if applicable)
-- **Docker** (optional, for easier deployment)
-
-### Installation
-
-1. Clone the repository:
-   ```sh
-   git clone https://github.com/user/repo.git
-   cd repo
-   ```
-2. Build and run the backend:
-   ```sh
-   mvn spring-boot:run
-   ```
-3. Access the web interface at `http://localhost:8080`
+Details, endpoints, and tests: see the submodule READMEs.
 
 ## License
 
-This project is licensed under the MIT License. See the `LICENSE` file for more details.
+MIT. See [LICENSE](LICENSE). Submodules use the same license.
