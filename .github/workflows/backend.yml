@@ -38,12 +38,12 @@ jobs:
           path: ~/.m2
           key: ${{ runner.os }}-m2-${{ hashFiles('backend/pom.xml') }}
           restore-keys: ${{ runner.os }}-m2
-      - name: Build and test
-        working-directory: backend
-        run: ./mvnw -B verify -Pcoverage
-      - name: SonarCloud scan
-        if: ${{ secrets.SONAR_TOKEN != '' }}
+      - name: Build, test, and analyze with SonarCloud
         working-directory: backend
         env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-        run: ./mvnw -B org.sonarsource.scanner.maven:sonar-maven-plugin:sonar -Pcoverage -Dsonar.projectKey=Opsord_architecture-evaluator-backend
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN_BACK }}
+        run: >
+          ./mvnw -B verify org.sonarsource.scanner.maven:sonar-maven-plugin:sonar
+          -Pcoverage
+          -Dsonar.organization=opsord
+          -Dsonar.projectKey=opsord_architecture-evaluator-backend
