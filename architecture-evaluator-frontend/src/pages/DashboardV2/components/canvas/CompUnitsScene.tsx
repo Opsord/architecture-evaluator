@@ -37,7 +37,7 @@ function getCubeSize(unit: ProcessedClassInstance): [number, number, number] {
     return [size, size, size];
 }
 
-function getDisplayName(unit: ProcessedClassInstance, categoryKey: CategoryKey, index: number): string {
+function getRawDisplayName(unit: ProcessedClassInstance, categoryKey: CategoryKey, index: number): string {
     const className = unit.classInstance?.name?.trim() ?? "";
     if (
         !className &&
@@ -52,6 +52,15 @@ function getDisplayName(unit: ProcessedClassInstance, categoryKey: CategoryKey, 
     return `Unnamed-${categoryKey}-${index}`;
 }
 
+function getShortPackageSuffix(packageName?: string): string {
+    const trimmed = packageName?.trim();
+    if (!trimmed || trimmed === "default") {
+        return "";
+    }
+    const lastDot = trimmed.lastIndexOf(".");
+    return lastDot >= 0 ? trimmed.substring(lastDot + 1) : trimmed;
+}
+
 function unitsForCategory(projectData: ProjectAnalysisDTO, key: CategoryKey): ProcessedClassInstance[] {
     if (key === "entities_documents") {
         return [...(projectData.entities || []), ...(projectData.documents || [])];
@@ -62,11 +71,12 @@ function unitsForCategory(projectData: ProjectAnalysisDTO, key: CategoryKey): Pr
 interface CompUnitsSceneProps {
     projectData: ProjectAnalysisDTO;
     selectedCube: string | null;
-    setSelectedCube: (name: string | null, unit: ProcessedClassInstance | null) => void;
+    setSelectedCube: (id: string | null, unit: ProcessedClassInstance | null) => void;
     vibrationEnabled: boolean;
 }
 
 export interface CompUnitVisual {
+    id: string;
     data: ProcessedClassInstance;
     displayName: string;
     position: [number, number, number];
@@ -85,6 +95,7 @@ const CompUnitsScene: React.FC<CompUnitsSceneProps> = ({
         const classPosMap: Record<string, [number, number, number]> = {};
         const boxes: { rowIdx: number; boxPos: [number, number, number]; boxSize: [number, number, number]; label: string }[] = [];
         const rows: CompUnitVisual[][] = [];
+        const rawNameCounts = new Map<string, number>();
 
         let y = 0;
         let visibleRow = 0;
@@ -124,17 +135,20 @@ const CompUnitsScene: React.FC<CompUnitsSceneProps> = ({
             const rowCubes: CompUnitVisual[] = [];
             centeredUnits.forEach((unit, idx) => {
                 const size = sizes[idx];
-                const displayName = getDisplayName(unit, cat.key, idx);
+                const rawDisplayName = getRawDisplayName(unit, cat.key, idx);
+                const id = unit.classInstance?.qualifiedName?.trim() || rawDisplayName;
+                rawNameCounts.set(rawDisplayName, (rawNameCounts.get(rawDisplayName) ?? 0) + 1);
                 const cubeInfo: CompUnitVisual = {
+                    id,
                     data: unit,
-                    displayName,
+                    displayName: rawDisplayName,
                     position: [x + size[0] / 2, -y, z],
                     size,
                     rowIdx: visibleRow,
                 };
                 cubes.push(cubeInfo);
                 rowCubes.push(cubeInfo);
-                classPosMap[displayName] = cubeInfo.position;
+                classPosMap[id] = cubeInfo.position;
                 x += size[0] + GAP;
             });
             rows.push(rowCubes);
@@ -142,25 +156,36 @@ const CompUnitsScene: React.FC<CompUnitsSceneProps> = ({
             y += boxHeight + verticalGap;
             visibleRow++;
         });
+
+        // Second pass across all rows: disambiguate displayName for homonymous classes
+        for (const cube of cubes) {
+            if ((rawNameCounts.get(cube.displayName) ?? 0) > 1) {
+                const suffix = getShortPackageSuffix(cube.data.classInstance?.packageName);
+                if (suffix) {
+                    cube.displayName = `${cube.displayName} (${suffix})`;
+                }
+            }
+        }
+
         return { cubes, classPosMap, boxes, rows };
     }, [projectData]);
 
     const cubesByRow = useMemo(() => {
-        const selected = cubes.find((c) => c.displayName === selectedCube);
+        const selected = cubes.find((c) => c.id === selectedCube);
         const dependencySet = new Set(selected?.data.classInstance.classDependencies ?? []);
-        const dependentSet = new Set<string>();
-        if (selectedCube) {
+        const dependentSet = new Set(selected?.data.classInstance.dependentClasses ?? []);
+        if (selectedCube && dependentSet.size === 0) {
             for (const cube of cubes) {
                 if ((cube.data.classInstance.classDependencies ?? []).includes(selectedCube)) {
-                    dependentSet.add(cube.displayName);
+                    dependentSet.add(cube.id);
                 }
             }
         }
 
         const flagged: FlaggedCube[] = cubes.map((cube) => {
-            const isSelected = selectedCube === cube.displayName;
-            const isDependency = selectedCube ? dependencySet.has(cube.displayName) : false;
-            const isDependent = selectedCube ? dependentSet.has(cube.displayName) : false;
+            const isSelected = selectedCube === cube.id;
+            const isDependency = selectedCube ? dependencySet.has(cube.id) : false;
+            const isDependent = selectedCube ? dependentSet.has(cube.id) : false;
             return {
                 ...cube,
                 isSelected,
@@ -174,17 +199,17 @@ const CompUnitsScene: React.FC<CompUnitsSceneProps> = ({
     }, [cubes, rows, selectedCube]);
 
     const selectedUnit = selectedCube
-        ? cubes.find((c) => c.displayName === selectedCube)?.data ?? null
+        ? cubes.find((c) => c.id === selectedCube)?.data ?? null
         : null;
 
     const onSelectCube = useCallback(
-        (name: string) => {
-            if (name === selectedCube) {
+        (id: string) => {
+            if (id === selectedCube) {
                 setSelectedCube(null, null);
                 return;
             }
-            const unit = cubes.find((c) => c.displayName === name)?.data ?? null;
-            setSelectedCube(name, unit);
+            const unit = cubes.find((c) => c.id === id)?.data ?? null;
+            setSelectedCube(id, unit);
         },
         [cubes, selectedCube, setSelectedCube],
     );

@@ -11,7 +11,7 @@ export type FlaggedCube = CompUnitVisual & {
 
 interface CubeRowProps {
     cubes: FlaggedCube[];
-    onSelectCube: (name: string) => void;
+    onSelectCube: (id: string) => void;
     vibrationEnabled: boolean;
 }
 
@@ -23,7 +23,8 @@ const CompUnitRow: React.FC<CubeRowProps> = ({
     <>
         {cubes.map((cube) => (
             <CubeElement
-                key={cube.displayName}
+                key={cube.id}
+                id={cube.id}
                 position={cube.position}
                 label={cube.displayName}
                 size={cube.size}

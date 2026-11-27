@@ -27,6 +27,8 @@ interface DependencyLineProps {
     to: [number, number, number];
     source: string;
     target: string;
+    sourceLabel?: string;
+    targetLabel?: string;
     hoveredLine: string | null;
     isConnected: boolean;
     setHoveredLine: (key: string | null) => void;
@@ -38,6 +40,8 @@ const DependencyLine: React.FC<DependencyLineProps> = ({
                                                            to,
                                                            source,
                                                            target,
+                                                           sourceLabel,
+                                                           targetLabel,
                                                            hoveredLine,
                                                            isConnected,
                                                            setHoveredLine,
@@ -98,7 +102,7 @@ const DependencyLine: React.FC<DependencyLineProps> = ({
                         fontSize: "0.8rem",
                         boxShadow: "0 2px 8px rgba(0,0,0,0.15)"
                     }}>
-                        {`Class "${target}" depends on "${source}"`}
+                        {`Class "${targetLabel ?? target}" depends on "${sourceLabel ?? source}"`}
                     </div>
                 </Html>
             )}

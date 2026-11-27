@@ -31,6 +31,11 @@ const LabelWithTooltip: React.FC<{ label: string; description: string }> = ({ la
     </span>
 );
 
+const formatShortClassName = (dep: string): string => {
+    const lastDot = dep.lastIndexOf(".");
+    return lastDot >= 0 ? dep.substring(lastDot + 1) : dep;
+};
+
 const ProcessedClassInfoCard: React.FC<{ unit: ProcessedClassInstance | null }> = ({ unit }) => {
     if (!unit) {
         return (
@@ -42,6 +47,10 @@ const ProcessedClassInfoCard: React.FC<{ unit: ProcessedClassInstance | null }> 
 
     const classInstance = unit.classInstance ?? {};
     const classLayerAnnotation = classInstance.layerAnnotation ?? "UNKNOWN";
+    const trimmedPackage = classInstance.packageName?.trim();
+    const packageName = trimmedPackage && trimmedPackage !== "default"
+        ? trimmedPackage
+        : null;
     const analysis = unit.classAnalysisInstance ?? {};
     const programMetrics = analysis.programMetrics ?? {};
     const complexityMetrics = analysis.complexityMetrics ?? {};
@@ -53,6 +62,9 @@ const ProcessedClassInfoCard: React.FC<{ unit: ProcessedClassInstance | null }> 
             {/* Header */}
             <div className="mb-5">
                 <div className="text-2xl font-bold text-swamp-900">{classInstance.name ?? ""}</div>
+                {packageName && (
+                    <div className="text-xs text-gray-500 break-all">{packageName}</div>
+                )}
                 <div className="text-[15px] font-semibold text-primary">{classLayerAnnotation}</div>
             </div>
 
@@ -120,7 +132,11 @@ const ProcessedClassInfoCard: React.FC<{ unit: ProcessedClassInstance | null }> 
                     <LabelWithTooltip label="LCOM4:" description={metricDescriptions.lackOfCohesion4} />
                     <div className="font-medium">{cohesionMetrics.lackOfCohesion4 ?? 0}</div>
                     <LabelWithTooltip label="LCOM5:" description={metricDescriptions.lackOfCohesion5} />
-                    <div className="font-medium">{cohesionMetrics.lackOfCohesion5 ?? 0}</div>
+                    <div className="font-medium">
+                        {typeof cohesionMetrics.lackOfCohesion5 === "number"
+                            ? cohesionMetrics.lackOfCohesion5.toFixed(3)
+                            : "0.000"}
+                    </div>
                 </div>
             </div>
 
@@ -132,9 +148,10 @@ const ProcessedClassInfoCard: React.FC<{ unit: ProcessedClassInstance | null }> 
                         ? classInstance.dependentClasses.map((dep: string) => (
                             <span
                                 key={dep}
+                                title={dep}
                                 className="bg-bright-turquoise-100 text-bright-turquoise-800 px-2 py-0.5 rounded-full text-xs font-medium border border-bright-turquoise-200 shadow-sm"
                             >
-                    {dep}
+                    {formatShortClassName(dep)}
                 </span>
                         ))
                         : <span className="text-gray-400 italic">No dependencies</span>
@@ -146,9 +163,10 @@ const ProcessedClassInfoCard: React.FC<{ unit: ProcessedClassInstance | null }> 
                         ? classInstance.classDependencies.map((dep: string) => (
                             <span
                                 key={dep}
+                                title={dep}
                                 className="bg-swamp-100 text-swamp-800 px-2 py-0.5 rounded-full text-xs font-medium border border-swamp-200 shadow-sm"
                             >
-                    {dep}
+                    {formatShortClassName(dep)}
                 </span>
                         ))
                         : <span className="text-gray-400 italic">No dependencies</span>

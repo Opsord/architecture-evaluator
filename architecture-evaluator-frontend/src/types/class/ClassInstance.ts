@@ -11,6 +11,8 @@ import type { ExceptionHandlingInstance } from './ExceptionHandlingInstance';
 export interface ClassInstance {
     // --- Identity ---
     name: string;
+    packageName?: string;
+    qualifiedName?: string;
     javaFileType: JavaFileType;
     layerAnnotation: LayerAnnotation | null;
 

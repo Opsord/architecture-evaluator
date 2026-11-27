@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useProjectContext } from "../../context/ProjectContext";
 import CompUnitsScene from "./components/canvas/CompUnitsScene.tsx";
 import ProcessedClassInfoCard from "./components/info/ProcessedClassInfoCard.tsx";
@@ -11,6 +11,11 @@ const DashboardV2: React.FC = () => {
     const [selectedCube, setSelectedCube] = useState<string | null>(null);
     const [selectedUnit, setSelectedUnit] = useState<ProcessedClassInstance | null>(null);
     const [vibrationEnabled, setVibrationEnabled] = useState(true);
+
+    useEffect(() => {
+        setSelectedCube(null);
+        setSelectedUnit(null);
+    }, [projectData]);
 
     if (!projectData) {
         return (

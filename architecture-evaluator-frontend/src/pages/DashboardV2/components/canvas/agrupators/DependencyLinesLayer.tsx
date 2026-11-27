@@ -32,10 +32,10 @@ const DependencyLinesLayer: React.FC<DependencyLinesLayerProps> = ({
 }) => {
     const [hoveredLine, setHoveredLine] = useState<string | null>(null);
 
-    const cubeByName = useMemo(() => {
+    const cubeById = useMemo(() => {
         const map = new Map<string, CompUnitVisual>();
         for (const cube of cubes) {
-            map.set(cube.displayName, cube);
+            map.set(cube.id, cube);
         }
         return map;
     }, [cubes]);
@@ -49,20 +49,23 @@ const DependencyLinesLayer: React.FC<DependencyLinesLayerProps> = ({
         const result: {
             source: string;
             target: string;
+            sourceLabel: string;
+            targetLabel: string;
             from: [number, number, number];
             to: [number, number, number];
             direction: "incoming" | "outgoing" | "other";
         }[] = [];
 
         for (const cube of cubes) {
-            const source = cube.displayName;
+            const source = cube.id;
             const deps = cube.data.classInstance.dependentClasses ?? [];
             for (const target of deps) {
                 const to = classPosMap[target];
+                const targetCube = cubeById.get(target);
                 if (!to || (source !== selectedCube && target !== selectedCube)) {
                     continue;
                 }
-                if (!shouldShowDependencyLine(cube, cubeByName.get(target))) {
+                if (!shouldShowDependencyLine(cube, targetCube)) {
                     continue;
                 }
                 let direction: "incoming" | "outgoing" | "other" = "other";
@@ -74,6 +77,8 @@ const DependencyLinesLayer: React.FC<DependencyLinesLayerProps> = ({
                 result.push({
                     source,
                     target,
+                    sourceLabel: cube.displayName,
+                    targetLabel: targetCube?.displayName ?? target,
                     from: cube.position,
                     to,
                     direction,
@@ -81,7 +86,7 @@ const DependencyLinesLayer: React.FC<DependencyLinesLayerProps> = ({
             }
         }
         return result;
-    }, [cubes, classPosMap, cubeByName, selectedCube, selectedUnit]);
+    }, [cubes, classPosMap, cubeById, selectedCube, selectedUnit]);
 
     if (!selectedCube) {
         return null;
@@ -96,6 +101,8 @@ const DependencyLinesLayer: React.FC<DependencyLinesLayerProps> = ({
                     to={line.to}
                     source={line.source}
                     target={line.target}
+                    sourceLabel={line.sourceLabel}
+                    targetLabel={line.targetLabel}
                     hoveredLine={hoveredLine}
                     isConnected={selectedCube === line.source || selectedCube === line.target}
                     setHoveredLine={setHoveredLine}

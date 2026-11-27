@@ -75,11 +75,12 @@ function getCCColor(cc: number): string {
 }
 
 interface CubeProps {
+    id: string;
     position: [number, number, number];
     label: string;
     size?: [number, number, number];
     unit?: ProcessedClassInstance;
-    onSelect?: (name: string) => void;
+    onSelect?: (id: string) => void;
     isSelected?: boolean;
     dimmed?: boolean;
     vibrationEnabled?: boolean;
@@ -88,6 +89,7 @@ interface CubeProps {
 }
 
 const CubeElement: React.FC<CubeProps> = ({
+    id,
     position,
     label,
     size = [1, 1, 1],
@@ -107,7 +109,7 @@ const CubeElement: React.FC<CubeProps> = ({
 
     const meshRef = useRef<Mesh>(null);
     const shouldVibrate = vibrationEnabled && Math.min(instability, 0.99) > 0.1;
-    const phase = useMemo(() => hashLabel(label) * 0.001, [label]);
+    const phase = useMemo(() => hashLabel(id) * 0.001, [id]);
 
     useEffect(() => {
         if (!shouldVibrate && meshRef.current) {
@@ -132,8 +134,8 @@ const CubeElement: React.FC<CubeProps> = ({
         if (lcom <= 0) {
             return getPlainBoxGeometry(size);
         }
-        return getDeformedBoxGeometry(size, lcom, hashLabel(label));
-    }, [size, lcom, label]);
+        return getDeformedBoxGeometry(size, lcom, hashLabel(id));
+    }, [size, lcom, id]);
 
     useEffect(() => {
         if (lcom <= 0) {
@@ -162,7 +164,7 @@ const CubeElement: React.FC<CubeProps> = ({
             onPointerOut={() => setHovered(false)}
             onClick={(event) => {
                 event.stopPropagation();
-                onSelect?.(label);
+                onSelect?.(id);
             }}
         >
             <meshStandardMaterial
@@ -192,6 +194,7 @@ function cubePropsEqual(prev: CubeProps, next: CubeProps): boolean {
     const prevSize = prev.size ?? [1, 1, 1];
     const nextSize = next.size ?? [1, 1, 1];
     return (
+        prev.id === next.id &&
         prev.label === next.label &&
         prev.position[0] === next.position[0] &&
         prev.position[1] === next.position[1] &&
