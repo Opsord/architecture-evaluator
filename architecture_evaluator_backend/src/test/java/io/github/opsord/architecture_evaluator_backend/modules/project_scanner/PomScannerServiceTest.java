@@ -132,7 +132,9 @@ class PomScannerServiceTest {
               <groupId>com.example</groupId>
               <artifactId>demo</artifactId>
               <version>1.0.0</version>
-              <java.version>17</java.version>
+              <properties>
+                <java.version>17</java.version>
+              </properties>
             </project>
             """);
         }
@@ -228,7 +230,9 @@ class PomScannerServiceTest {
                   <name>Developer Name</name>
                 </developer>
               </developers>
-              <java.version>11</java.version>
+              <properties>
+                <java.version>11</java.version>
+              </properties>
             </project>
             """);
         }
@@ -245,5 +249,69 @@ class PomScannerServiceTest {
         assertEquals(1, pomFileInstance.getDevelopers().size());
         assertEquals("Developer Name", pomFileInstance.getDevelopers().get(0));
         assertEquals("11", pomFileInstance.getJavaVersion());
+    }
+
+    @Test
+    void testScanPomFile_inheritsParentAndExcludesDependencyManagementPluginsAndExclusions() throws Exception {
+        File tempDir = java.nio.file.Files.createTempDirectory("pomedge").toFile();
+        File pom = new File(tempDir, "pom.xml");
+        try (FileWriter fw = new FileWriter(pom)) {
+            fw.write("""
+                <project>
+                  <parent>
+                    <groupId>com.acme.parent</groupId>
+                    <artifactId>parent-pom</artifactId>
+                    <version>3.0.0</version>
+                  </parent>
+                  <artifactId>child-module</artifactId>
+                  <properties>
+                    <maven.compiler.release>21</maven.compiler.release>
+                  </properties>
+                  <dependencyManagement>
+                    <dependencies>
+                      <dependency>
+                        <groupId>com.managed</groupId>
+                        <artifactId>managed-dep</artifactId>
+                        <version>1.0.0</version>
+                      </dependency>
+                    </dependencies>
+                  </dependencyManagement>
+                  <dependencies>
+                    <dependency>
+                      <groupId>org.springframework.boot</groupId>
+                      <artifactId>spring-boot-starter-web</artifactId>
+                      <exclusions>
+                        <exclusion>
+                          <groupId>org.excluded.group</groupId>
+                          <artifactId>excluded-artifact</artifactId>
+                        </exclusion>
+                      </exclusions>
+                    </dependency>
+                  </dependencies>
+                  <build>
+                    <plugins>
+                      <plugin>
+                        <dependencies>
+                          <dependency>
+                            <groupId>com.plugin.dep</groupId>
+                            <artifactId>plugin-helper</artifactId>
+                          </dependency>
+                        </dependencies>
+                      </plugin>
+                    </plugins>
+                  </build>
+                </project>
+                """);
+        }
+
+        Optional<PomFileInstance> result = pomScannerService.scanPomFile(tempDir);
+        assertTrue(result.isPresent());
+        PomFileInstance parsed = result.get();
+        assertEquals("com.acme.parent", parsed.getGroupId());
+        assertEquals("3.0.0", parsed.getVersion());
+        assertEquals("21", parsed.getJavaVersion());
+        assertEquals(1, parsed.getDependencies().size());
+        assertEquals("org.springframework.boot", parsed.getDependencies().get(0).getGroupId());
+        assertEquals("spring-boot-starter-web", parsed.getDependencies().get(0).getArtifactId());
     }
 }

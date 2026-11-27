@@ -7,28 +7,32 @@ import io.github.opsord.architecture_evaluator_backend.modules.api.processor.dto
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+import java.util.Collections;
+import java.util.List;
+
 @Service
 @RequiredArgsConstructor
 public class ProgramMetricsService {
 
     private final StatementService statementService;
 
-    /**
-     * Generates program-level metrics for a given class.
-     *
-     * @param classInstance The class to analyze.
-     * @return The program metrics for the given class.
-     */
     public ProgramMetricsDTO generateProgramMetrics(ClassInstance classInstance) {
         ProgramMetricsDTO programMetrics = new ProgramMetricsDTO();
+        if (classInstance == null) {
+            return programMetrics;
+        }
 
-        int numberOfMethods = classInstance.getMethods().size();
+        List<MethodInstance> methods = classInstance.getMethods() != null
+                ? classInstance.getMethods()
+                : Collections.emptyList();
+
+        int numberOfMethods = methods.size();
         int sumOfExecutableStatements = statementService.countExecutableStatements(classInstance.getStatements());
         int maxInputParameters = 0;
         int maxOutputParameters = 0;
         int totalLinesOfCode = classInstance.getLinesOfCode();
 
-        for (MethodInstance method : classInstance.getMethods()) {
+        for (MethodInstance method : methods) {
             int inputParameters = method.getInputParameters() != null ? method.getInputParameters().size() : 0;
             int outputParameters = method.getOutputParameters() != null ? method.getOutputParameters().size() : 0;
             if (inputParameters > maxInputParameters) {

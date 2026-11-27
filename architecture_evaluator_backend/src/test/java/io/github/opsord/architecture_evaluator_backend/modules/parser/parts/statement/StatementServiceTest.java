@@ -62,4 +62,51 @@ class StatementServiceTest {
         assertTrue(expressionStructures.contains("callee"));
         assertTrue(expressionStructures.contains(null));
     }
+
+    @Test
+    void countsForEachDoWhileSwitchExprWhenGuardAndIgnoresAnonymousClasses() {
+        var parser = new com.github.javaparser.JavaParser(
+                new com.github.javaparser.ParserConfiguration()
+                        .setLanguageLevel(com.github.javaparser.ParserConfiguration.LanguageLevel.JAVA_21));
+        String source = """
+            class Demo {
+                int process(java.util.List<Object> items) {
+                    int count = 0;
+                    for (Object item : items) {
+                        count += switch (item) {
+                            case String s when s.length() > 1 && s.length() < 10 -> 1;
+                            case Integer i -> 2;
+                            default -> 0;
+                        };
+                    }
+                    do {
+                        count--;
+                    } while (count > 0);
+
+                    Runnable r = new Runnable() {
+                        @Override
+                        public void run() {
+                            if (true && false) {
+                                int z = true ? 1 : 0;
+                            }
+                        }
+                    };
+                    return count;
+                }
+            }
+            """;
+        CompilationUnit cu = parser.parse(source).getResult().orElseThrow();
+        MethodDeclaration method = cu.getClassByName("Demo").orElseThrow()
+                .getMethodsByName("process").get(0);
+
+        StatementsInfo info = statementService.getStatementsInfoFromMethod(method);
+        // 1 for-each + 1 do-while = 2 control statements (anonymous class "if" ignored!)
+        assertEquals(2, info.getNumberOfControlStatements());
+        // 2 case labels + 1 when guard = 3 switch cases (default = 0)
+        assertEquals(3, info.getNumberOfSwitchCases());
+        // 1 "&&" in when guard (anonymous class "&&" ignored!)
+        assertEquals(1, info.getNumberOfLogicalOperators());
+        // anonymous class ternary ignored!
+        assertEquals(0, info.getNumberOfTernaryOperators());
+    }
 }

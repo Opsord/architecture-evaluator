@@ -80,4 +80,34 @@ class FileServiceTest {
         assertTrue(deps.contains("C"));
         assertFalse(deps.contains("D"));
     }
+
+    @Test
+    void testGetDependentClassFqnsHandlesWildcardJavaLangGuardNestedTypesAndStaticImports() {
+        FileInstance file = new FileInstance();
+        file.setPackageName("com.acme.service");
+        file.setImportedPackages(List.of("com.acme.model.Order", "com.acme.other.*"));
+        file.setStaticImports(List.of("com.acme.util.Helper.run"));
+
+        ClassInstance cls = new ClassInstance();
+        cls.setName("OrderService");
+        cls.setPackageName("com.acme.service");
+        cls.setQualifiedName("com.acme.service.OrderService");
+        cls.setUsedClasses(List.of("Order.Status", "Error", "OrderService", "ExtraType"));
+
+        Set<String> projectFqns = Set.of(
+                "com.acme.service.OrderService",
+                "com.acme.model.Order",
+                "com.acme.other.Error",
+                "com.acme.other.ExtraType",
+                "com.acme.util.Helper");
+        var nestedMap = java.util.Map.of("com.acme.model.Order.Status", "com.acme.model.Order");
+
+        List<String> deps = fileInstanceService.getDependentClassFqns(cls, file, projectFqns, nestedMap);
+
+        assertTrue(deps.contains("com.acme.model.Order"));
+        assertTrue(deps.contains("com.acme.other.ExtraType"));
+        assertTrue(deps.contains("com.acme.util.Helper"));
+        assertFalse(deps.contains("com.acme.other.Error"), "java.lang.Error must not be shadowed by wildcard import");
+        assertFalse(deps.contains("com.acme.service.OrderService"), "Self-dependency must be excluded");
+    }
 }

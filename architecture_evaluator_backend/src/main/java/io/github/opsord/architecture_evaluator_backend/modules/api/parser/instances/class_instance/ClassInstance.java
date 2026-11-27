@@ -11,6 +11,8 @@ import java.util.List;
 public class ClassInstance {
     // --- Identity ---
     private String name;                  // class name
+    private String packageName;           // package name
+    private String qualifiedName;         // FQN (packageName.name or name for default package)
     private JavaFileType javaFileType;    // CLASS, INTERFACE, ENUM...
     private LayerAnnotation layerAnnotation;          // CONTROLLER, SERVICE...
 

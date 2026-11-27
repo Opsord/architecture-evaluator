@@ -95,4 +95,33 @@ class ImportClassifierServiceTest {
         Map<ImportCategory, List<String>> result = service.classifyDependencies(Optional.empty(), file, "base");
         assertTrue(result.isEmpty());
     }
+
+    @Test
+    void classify_jakartaNullBaseSegmentBoundaryAndGradle() {
+        FileInstance file = fileWithImports(List.of(
+                "jakarta.persistence.Entity",
+                "com.app.service.MyService",
+                "com.apple.Foo",
+                "com.fasterxml.jackson.databind.ObjectMapper"
+        ));
+        file.setStaticImports(List.of("com.app.util.AssertUtil.check"));
+
+        var gradle = new io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.instances.gradle.GradleFileInstance();
+        gradle.setDependencies(List.of(
+                new io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.instances.gradle.GradleDependencyInstance(
+                        "com.fasterxml.jackson", "jackson-databind", "2.18.0")
+        ));
+
+        Map<ImportCategory, List<String>> result = service.classifyDependencies(
+                Optional.empty(), Optional.of(gradle), file, "com.app");
+
+        assertEquals(List.of("jakarta.persistence.Entity"), result.get(ImportCategory.JAVA_STANDARD));
+        assertEquals(List.of("com.app.service.MyService", "com.app.util.AssertUtil.check"), result.get(ImportCategory.INTERNAL));
+        assertEquals(List.of("com.fasterxml.jackson.databind.ObjectMapper"), result.get(ImportCategory.EXTERNAL_KNOWN));
+        assertEquals(List.of("com.apple.Foo"), result.get(ImportCategory.EXTERNAL_UNKNOWN));
+
+        // Null internalBasePackage must not throw NPE
+        assertEquals(ImportCategory.EXTERNAL_UNKNOWN,
+                service.classify("com.app.service.MyService", List.of(), null, null));
+    }
 }

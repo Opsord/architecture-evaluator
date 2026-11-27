@@ -80,7 +80,7 @@ class CohesionMetricsServiceTest {
         assertEquals(1, dto.getLackOfCohesion2()); // 1 disconnected - 0 connected
         assertEquals(2, dto.getLackOfCohesion3()); // 2 isolated nodes
         assertEquals(2, dto.getLackOfCohesion4()); // no calls => same as LCOM3
-        assertEquals(0.5, dto.getLackOfCohesion5()); // (1 + 1) / (2*2) = 0.5 => 1 - 0.5 = 0.5
+        assertEquals(1.0, dto.getLackOfCohesion5(), 0.001); // Henderson-Sellers: (2 - 2/2) / (2 - 1) = 1.0
     }
 
     @Test
@@ -110,7 +110,7 @@ class CohesionMetricsServiceTest {
         assertEquals(0, dto.getLackOfCohesion2()); // 0 disconnected - 3 connected = 0
         assertEquals(1, dto.getLackOfCohesion3()); // full-connected graph
         assertEquals(1, dto.getLackOfCohesion4()); // no method calls, same as LCOM3
-        assertEquals(0.333, dto.getLackOfCohesion5(), 0.001); // (1+2+1) / 6 = 0.666 => 1 - 0.666 = 0.333
+        assertEquals(0.5, dto.getLackOfCohesion5(), 0.001); // Henderson-Sellers: (3 - 4/2) / (3 - 1) = 0.5
     }
 
     @Test
@@ -151,6 +151,51 @@ class CohesionMetricsServiceTest {
         call.setStructure("callee");
         info.setStatements(List.of(call));
         caller.setStatementsInfo(info);
+
+        ClassInstance c = classInstance(Collections.emptyList(), List.of(caller, callee));
+        CohesionMetricsDTO dto = service.calculateCohesionMetrics(c);
+        assertEquals(1, dto.getLackOfCohesion4());
+    }
+
+    @Test
+    void testStaticMethodsAreExcludedFromCohesion() {
+        VariableInstance v1 = variableInstanceTest("a");
+        MethodInstance m1 = method("m1", v1);
+        MethodInstance m2 = method("m2", v1);
+        MethodInstance staticFactory = method("of");
+        var basicInfo = new io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.parts.BasicInfo();
+        basicInfo.setStatic(true);
+        staticFactory.setBasicInfo(basicInfo);
+
+        ClassInstance c = classInstance(List.of(v1), List.of(m1, m2, staticFactory));
+        CohesionMetricsDTO dto = service.calculateCohesionMetrics(c);
+        assertEquals(0, dto.getLackOfCohesion1());
+        assertEquals(1, dto.getLackOfCohesion3());
+        assertEquals(0.0, dto.getLackOfCohesion5(), 0.001);
+    }
+
+    @Test
+    void testLocalShadowingVariablesDoNotConnectMethods() {
+        VariableInstance fieldA = variableInstanceTest("a");
+        VariableInstance localA = new VariableInstance();
+        localA.setName("a");
+        localA.setScope("local");
+
+        MethodInstance m1 = method("m1", localA);
+        MethodInstance m2 = method("m2", localA);
+
+        ClassInstance c = classInstance(List.of(fieldA), List.of(m1, m2));
+        CohesionMetricsDTO dto = service.calculateCohesionMetrics(c);
+        assertEquals(1, dto.getLackOfCohesion1());
+        assertEquals(2, dto.getLackOfCohesion3());
+    }
+
+    @Test
+    void testLcom4UsesInvokedMethodsList() {
+        MethodInstance caller = method("caller");
+        caller.setInvokedMethods(List.of("callee"));
+        MethodInstance callee = method("callee");
+        callee.setInvokedMethods(List.of());
 
         ClassInstance c = classInstance(Collections.emptyList(), List.of(caller, callee));
         CohesionMetricsDTO dto = service.calculateCohesionMetrics(c);

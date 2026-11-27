@@ -6,7 +6,9 @@ import lombok.Getter;
 public enum StatementType {
     IF,
     FOR,
+    FOR_EACH,
     WHILE,
+    DO_WHILE,
     SWITCH,
     EXPRESSION,
     RETURN,

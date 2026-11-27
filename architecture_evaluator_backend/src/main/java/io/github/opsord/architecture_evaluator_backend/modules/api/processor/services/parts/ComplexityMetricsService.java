@@ -3,34 +3,50 @@ package io.github.opsord.architecture_evaluator_backend.modules.api.processor.se
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.ClassInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.MethodInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.parts.StatementsInfo;
+import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.parts.statement.StatementInstance;
+import io.github.opsord.architecture_evaluator_backend.modules.api.parser.services.class_instance.parts.statement.StatementService;
 import io.github.opsord.architecture_evaluator_backend.modules.api.processor.dto.parts.ComplexityMetricsDTO;
+import io.github.opsord.architecture_evaluator_backend.modules.api.processor.dto.parts.ProgramMetricsDTO;
 import org.springframework.stereotype.Service;
+
+import java.util.Collections;
+import java.util.List;
 
 @Service
 public class ComplexityMetricsService {
 
-    /**
-     * Calculates complexity metrics for a given class instance.
-     *
-     * @param classInstance the class instance to analyze
-     * @return a ComplexityMetricsDTO containing the calculated metrics
-     */
     public ComplexityMetricsDTO calculateComplexityMetrics(ClassInstance classInstance) {
+        return calculateComplexityMetrics(classInstance, null);
+    }
+
+    public ComplexityMetricsDTO calculateComplexityMetrics(
+            ClassInstance classInstance,
+            ProgramMetricsDTO programMetrics) {
         ComplexityMetricsDTO complexityMetrics = new ComplexityMetricsDTO();
+        if (classInstance == null) {
+            return complexityMetrics;
+        }
+
+        List<MethodInstance> methods = classInstance.getMethods() != null
+                ? classInstance.getMethods()
+                : Collections.emptyList();
 
         int compUnitApproxMcCabeCC = 0;
-        int numberOfMethods = classInstance.getMethods().size();
-        int sumOfExecutableStatements = classInstance.getStatements().size();
-        int maxInputParameters = 0;
-        int maxOutputParameters = 0;
-        int totalLinesOfCode = classInstance.getLinesOfCode();
+        int numberOfMethods = programMetrics != null ? programMetrics.getNumberOfMethods() : methods.size();
+        int sumOfExecutableStatements = programMetrics != null
+                ? programMetrics.getSumOfExecutableStatements()
+                : countExecutableStatements(classInstance.getStatements());
+        int maxInputParameters = programMetrics != null ? programMetrics.getMaxInputParameters() : 0;
+        int maxOutputParameters = programMetrics != null ? programMetrics.getMaxOutputParameters() : 0;
+        int totalLinesOfCode = programMetrics != null ? programMetrics.getLinesOfCode() : classInstance.getLinesOfCode();
 
-        for (MethodInstance method : classInstance.getMethods()) {
-            int inputParameters = method.getInputParameters() != null ? method.getInputParameters().size() : 0;
-            int outputParameters = method.getOutputParameters() != null ? method.getOutputParameters().size() : 0;
-
-            maxInputParameters = Math.max(maxInputParameters, inputParameters);
-            maxOutputParameters = Math.max(maxOutputParameters, outputParameters);
+        for (MethodInstance method : methods) {
+            if (programMetrics == null) {
+                int inputParameters = method.getInputParameters() != null ? method.getInputParameters().size() : 0;
+                int outputParameters = method.getOutputParameters() != null ? method.getOutputParameters().size() : 0;
+                maxInputParameters = Math.max(maxInputParameters, inputParameters);
+                maxOutputParameters = Math.max(maxOutputParameters, outputParameters);
+            }
 
             int methodMcCabeCC = calculateApproxMcCabeCC(method);
             if (method.getMethodMetrics() != null) {
@@ -49,56 +65,37 @@ public class ComplexityMetricsService {
         return complexityMetrics;
     }
 
+    private int countExecutableStatements(List<StatementInstance> statements) {
+        if (statements == null) {
+            return 0;
+        }
+        int count = 0;
+        for (StatementInstance statement : statements) {
+            if (statement != null && StatementService.isExecutableStatement(statement.getType())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     /**
-     * Calculates an improved approximation of McCabe Cyclomatic Complexity
-     * by inspecting various control structures in the AST.
-     *
-     * @param methodInstance the method instance to analyze
-     * @return approximate McCabe cyclomatic complexity
+     * Standard McCabe Cyclomatic Complexity:
+     * CC = 1 + controlStatements + switchCases + catchClauses + logicalOperators + ternaryOperators
+     * (WMC convention: methods without a body or with null StatementsInfo have CC = 1.)
      */
     private int calculateApproxMcCabeCC(MethodInstance methodInstance) {
         StatementsInfo info = methodInstance.getStatementsInfo();
-
-        // Base node count: all statements and explicit control nodes
-        int nodeCount = info.getStatements().size()
-                + info.getNumberOfControlStatements()        // if, for, while, switch
-                + info.getNumberOfReturnStatements()         // return
-                + info.getNumberOfThrowStatements()          // throw
-                + info.getNumberOfCatchClauses();            // catch
-
-        // Edge count: each control adds two edges, plus sequential edges
-        int sequentialEdges = info.getStatements().size() - 1;
-        int controlEdges = 2 * info.getNumberOfControlStatements()
-                + info.getNumberOfLogicalOperators()        // "&&" or "||"
-                + info.getNumberOfTernaryOperators();       // ?:
-
-        int edgeCount = sequentialEdges + controlEdges + info.getNumberOfReturnStatements();
-
-        // Usually a single connected component
-        int connectedComponents = 1;
-
-        // CC = E - N + 2P
-        return edgeCount - nodeCount + (2 * connectedComponents);
+        if (info == null) {
+            return 1;
+        }
+        return 1
+                + info.getNumberOfControlStatements()
+                + info.getNumberOfSwitchCases()
+                + info.getNumberOfCatchClauses()
+                + info.getNumberOfLogicalOperators()
+                + info.getNumberOfTernaryOperators();
     }
 
-
-    /**
-     * Calculates the Improved Cyclomatic Complexity (ICC_p).
-     * Formula: ICC_p = (N + S + I + O) / LOC
-     * where:
-     * N = number of methods
-     * S = sum of executable statements
-     * I = maximum number of input parameters
-     * O = maximum number of output parameters
-     * LOC = total lines of code
-     *
-     * @param numberOfMethods number of methods in the class
-     * @param sumOfExecutableStatements total number of executable statements
-     * @param maxInputParameters maximum number of input parameters in any method
-     * @param maxOutputParameters maximum number of output parameters in any method
-     * @param totalLinesOfCode total lines of code in the class
-     * @return the improved cyclomatic complexity value
-     */
     private double calculateImprovedCC(int numberOfMethods, int sumOfExecutableStatements, int maxInputParameters,
                                        int maxOutputParameters, int totalLinesOfCode) {
         return totalLinesOfCode > 0
@@ -106,5 +103,4 @@ public class ComplexityMetricsService {
                 / totalLinesOfCode
                 : 0;
     }
-
 }

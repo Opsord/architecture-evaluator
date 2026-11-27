@@ -53,7 +53,7 @@ class ClassAnalysisServiceTest {
         CohesionMetricsDTO cohesionMetrics = new CohesionMetricsDTO();
 
         when(programMetricsService.generateProgramMetrics(classInstance)).thenReturn(programMetrics);
-        when(complexityMetricsService.calculateComplexityMetrics(classInstance)).thenReturn(complexityMetrics);
+        when(complexityMetricsService.calculateComplexityMetrics(classInstance, programMetrics)).thenReturn(complexityMetrics);
         when(couplingMetricsService.calculateCouplingMetrics(classInstance)).thenReturn(couplingMetrics);
         when(cohesionMetricsService.calculateCohesionMetrics(classInstance)).thenReturn(cohesionMetrics);
 

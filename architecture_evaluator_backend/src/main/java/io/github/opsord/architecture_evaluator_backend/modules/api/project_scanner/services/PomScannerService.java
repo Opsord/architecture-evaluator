@@ -1,7 +1,7 @@
 package io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.services;
 
-import io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.instances.pom.PomDependencyInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.instances.pom.ParentSectionDTO;
+import io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.instances.pom.PomDependencyInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.instances.pom.PomFileInstance;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -9,12 +9,13 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.w3c.dom.Document;
 import org.w3c.dom.Element;
+import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
+import org.xml.sax.SAXException;
 
 import javax.xml.parsers.DocumentBuilder;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-import org.xml.sax.SAXException;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -28,7 +29,6 @@ import java.util.Optional;
 @RequiredArgsConstructor
 public class PomScannerService {
 
-    // XML Tag Constants
     private static final String TAG_GROUP_ID = "groupId";
     private static final String TAG_ARTIFACT_ID = "artifactId";
     private static final String TAG_VERSION = "version";
@@ -37,11 +37,17 @@ public class PomScannerService {
     private static final String TAG_LICENSE = "license";
     private static final String TAG_DEVELOPER = "developer";
     private static final String TAG_NAME = "name";
-    private static final String TAG_JAVA_VERSION = "java.version";
+    private static final String TAG_PROPERTIES = "properties";
+    private static final String TAG_DEPENDENCIES = "dependencies";
     private static final String TAG_DEPENDENCY = "dependency";
     private static final String TAG_PARENT = "parent";
 
-    // XML Security Feature Constants
+    private static final List<String> JAVA_VERSION_PROPERTIES = List.of(
+            "java.version",
+            "maven.compiler.release",
+            "maven.compiler.source",
+            "maven.compiler.target");
+
     private static final String FEATURE_DISALLOW_DOCTYPE = "http://apache.org/xml/features/disallow-doctype-decl";
     private static final String FEATURE_EXTERNAL_GENERAL_ENTITIES = "http://xml.org/sax/features/external-general-entities";
     private static final String FEATURE_EXTERNAL_PARAMETER_ENTITIES = "http://xml.org/sax/features/external-parameter-entities";
@@ -50,12 +56,6 @@ public class PomScannerService {
     private static final Logger logger = LoggerFactory.getLogger(PomScannerService.class);
     private final ScannerService scannerService;
 
-    /**
-     * Scans and parses the pom.xml file in the given project directory.
-     *
-     * @param projectDirectory the directory containing the pom.xml
-     * @return Optional containing PomFileInstance if parsing succeeds, otherwise empty
-     */
     public Optional<PomFileInstance> scanPomFile(File projectDirectory) {
         if (projectDirectory == null || !projectDirectory.isDirectory()) {
             logger.warn("Invalid project directory: {}",
@@ -80,19 +80,31 @@ public class PomScannerService {
 
             DocumentBuilder builder = factory.newDocumentBuilder();
             Document document = builder.parse(pomFile);
-            document.getDocumentElement().normalize();
+            Element root = document.getDocumentElement();
+            root.normalize();
 
             PomFileInstance pomFileInstance = new PomFileInstance();
-            pomFileInstance.setParentSection(getParentInfo(document));
-            pomFileInstance.setGroupId(getTagValue(document, TAG_GROUP_ID));
-            pomFileInstance.setArtifactId(getTagValue(document, TAG_ARTIFACT_ID));
-            pomFileInstance.setVersion(getTagValue(document, TAG_VERSION));
-            pomFileInstance.setDescription(getTagValue(document, TAG_DESCRIPTION));
-            pomFileInstance.setUrl(getTagValue(document, TAG_URL));
+            ParentSectionDTO parentSection = getParentInfo(root);
+            pomFileInstance.setParentSection(parentSection);
+
+            String groupId = getDirectChildText(root, TAG_GROUP_ID);
+            if ((groupId == null || groupId.isBlank()) && parentSection != null) {
+                groupId = parentSection.getGroupId();
+            }
+            String version = getDirectChildText(root, TAG_VERSION);
+            if ((version == null || version.isBlank()) && parentSection != null) {
+                version = parentSection.getVersion();
+            }
+
+            pomFileInstance.setGroupId(groupId);
+            pomFileInstance.setArtifactId(getDirectChildText(root, TAG_ARTIFACT_ID));
+            pomFileInstance.setVersion(version);
+            pomFileInstance.setDescription(getDirectChildText(root, TAG_DESCRIPTION));
+            pomFileInstance.setUrl(getDirectChildText(root, TAG_URL));
             pomFileInstance.setLicense(getLicense(document));
             pomFileInstance.setDevelopers(getDevelopers(document));
-            pomFileInstance.setJavaVersion(getTagValue(document, TAG_JAVA_VERSION));
-            pomFileInstance.setDependencies(parseDependencies(document));
+            pomFileInstance.setJavaVersion(getJavaVersion(root));
+            pomFileInstance.setDependencies(parseDependencies(root));
 
             return Optional.of(pomFileInstance);
         } catch (ParserConfigurationException e) {
@@ -107,77 +119,73 @@ public class PomScannerService {
         return Optional.empty();
     }
 
-    /**
-     * Parses the dependencies from the given XML document.
-     *
-     * @param document the XML document representing the pom.xml
-     * @return a list of PomDependencyInstance objects
-     */
-    private List<PomDependencyInstance> parseDependencies(Document document) {
+    private String getJavaVersion(Element root) {
+        Element properties = getDirectChildElement(root, TAG_PROPERTIES);
+        if (properties == null) {
+            return null;
+        }
+        for (String propName : JAVA_VERSION_PROPERTIES) {
+            String value = getDirectChildText(properties, propName);
+            if (value != null && !value.isBlank()) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private List<PomDependencyInstance> parseDependencies(Element root) {
         List<PomDependencyInstance> dependencyList = new ArrayList<>();
-        NodeList dependencyNodes = document.getElementsByTagName(TAG_DEPENDENCY);
+        Element dependenciesElement = getDirectChildElement(root, TAG_DEPENDENCIES);
+        if (dependenciesElement == null) {
+            return dependencyList;
+        }
 
-        for (int i = 0; i < dependencyNodes.getLength(); i++) {
-            Element dependency = (Element) dependencyNodes.item(i);
-            String groupId = getTagValue(dependency, TAG_GROUP_ID);
-            String artifactId = getTagValue(dependency, TAG_ARTIFACT_ID);
-            String version = getTagValue(dependency, TAG_VERSION);
+        NodeList children = dependenciesElement.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child.getNodeType() == Node.ELEMENT_NODE && TAG_DEPENDENCY.equals(child.getNodeName())) {
+                Element dependency = (Element) child;
+                String groupId = getDirectChildText(dependency, TAG_GROUP_ID);
+                String artifactId = getDirectChildText(dependency, TAG_ARTIFACT_ID);
+                String version = getDirectChildText(dependency, TAG_VERSION);
 
-            if (groupId != null && artifactId != null) {
-                dependencyList.add(new PomDependencyInstance(groupId, artifactId, version));
+                if (groupId != null && artifactId != null) {
+                    dependencyList.add(new PomDependencyInstance(groupId, artifactId, version));
+                }
             }
         }
 
         return dependencyList;
     }
 
-    /**
-     * Extracts the parent section information from the pom.xml document.
-     *
-     * @param document the XML document representing the pom.xml
-     * @return a ParentSectionDTO with parent info, or null if not present
-     */
-    private ParentSectionDTO getParentInfo(Document document) {
-        NodeList parentNodes = document.getElementsByTagName(TAG_PARENT);
-        if (parentNodes.getLength() > 0) {
-            Element parentElement = (Element) parentNodes.item(0);
+    private ParentSectionDTO getParentInfo(Element root) {
+        Element parentElement = getDirectChildElement(root, TAG_PARENT);
+        if (parentElement != null) {
             ParentSectionDTO parentDTO = new ParentSectionDTO();
-            parentDTO.setGroupId(getTagValue(parentElement, TAG_GROUP_ID));
-            parentDTO.setArtifactId(getTagValue(parentElement, TAG_ARTIFACT_ID));
-            parentDTO.setVersion(getTagValue(parentElement, TAG_VERSION));
+            parentDTO.setGroupId(getDirectChildText(parentElement, TAG_GROUP_ID));
+            parentDTO.setArtifactId(getDirectChildText(parentElement, TAG_ARTIFACT_ID));
+            parentDTO.setVersion(getDirectChildText(parentElement, TAG_VERSION));
             return parentDTO;
         }
         return null;
     }
 
-    /**
-     * Extracts the license name from the pom.xml document.
-     *
-     * @param document the XML document representing the pom.xml
-     * @return the license name or null if not present
-     */
     private String getLicense(Document document) {
         NodeList licenses = document.getElementsByTagName(TAG_LICENSE);
         if (licenses.getLength() > 0) {
             Element license = (Element) licenses.item(0);
-            return getTagValue(license, TAG_NAME);
+            return getDirectChildText(license, TAG_NAME);
         }
         return null;
     }
 
-    /**
-     * Extracts the list of developer names from the pom.xml document.
-     *
-     * @param document the XML document representing the pom.xml
-     * @return a list of developer names
-     */
     private List<String> getDevelopers(Document document) {
         List<String> developers = new ArrayList<>();
         NodeList developerNodes = document.getElementsByTagName(TAG_DEVELOPER);
 
         for (int i = 0; i < developerNodes.getLength(); i++) {
             Element developer = (Element) developerNodes.item(i);
-            String name = getTagValue(developer, TAG_NAME);
+            String name = getDirectChildText(developer, TAG_NAME);
             if (name != null) {
                 developers.add(name);
             }
@@ -186,42 +194,21 @@ public class PomScannerService {
         return developers;
     }
 
-    /**
-     * Retrieves the value of a tag from a given XML element.
-     *
-     * @param element the XML element
-     * @param tagName the tag name to search for
-     * @return the tag value, or null if not found
-     */
-    private String getTagValue(Element element, String tagName) {
-        NodeList nodeList = element.getElementsByTagName(tagName);
-        if (nodeList.getLength() > 0 && nodeList.item(0).getTextContent() != null) {
-            return nodeList.item(0).getTextContent().trim();
+    private Element getDirectChildElement(Element parent, String tagName) {
+        NodeList children = parent.getChildNodes();
+        for (int i = 0; i < children.getLength(); i++) {
+            Node child = children.item(i);
+            if (child.getNodeType() == Node.ELEMENT_NODE && tagName.equals(child.getNodeName())) {
+                return (Element) child;
+            }
         }
         return null;
     }
 
-    /**
-     * Retrieves the value of a tag from the root of the XML document.
-     *
-     * @param document the XML document
-     * @param tagName the tag name to search for
-     * @return the tag value, or null if not found
-     */
-    private String getTagValue(Document document, String tagName) {
-        try {
-            NodeList nodes = document.getDocumentElement().getElementsByTagName(tagName);
-            for (int i = 0; i < nodes.getLength(); i++) {
-                Element element = (Element) nodes.item(i);
-                if ("project".equals(element.getParentNode().getNodeName())) {
-                    String value = element.getTextContent();
-                    if (value != null) {
-                        return value.trim();
-                    }
-                }
-            }
-        } catch (Exception exception) {
-            logger.error("Error retrieving tag value for: {}", tagName, exception);
+    private String getDirectChildText(Element parent, String tagName) {
+        Element child = getDirectChildElement(parent, tagName);
+        if (child != null && child.getTextContent() != null) {
+            return child.getTextContent().trim();
         }
         return null;
     }

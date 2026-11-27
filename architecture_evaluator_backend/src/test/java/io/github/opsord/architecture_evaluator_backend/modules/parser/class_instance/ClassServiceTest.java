@@ -87,17 +87,13 @@ class ClassServiceTest {
         CompilationUnit cu = StaticJavaParser.parse(source);
         List<ClassInstance> result = classService.getClassesFromCompUnit(cu);
 
-        assertEquals(2, result.size(), "Debe haber dos clases extraídas");
+        assertEquals(1, result.size(), "Solo debe haber una clase top-level extraída");
 
-        // Find the outer class by name
-        ClassInstance outer = result.stream()
-                .filter(c -> "Outer".equals(c.getName()))
-                .findFirst()
-                .orElseThrow();
-
+        ClassInstance outer = result.get(0);
         assertEquals("Outer", outer.getName());
         assertEquals(1, outer.getInnerClasses().size(), "Debe detectar una clase interna");
         assertEquals("Inner", outer.getInnerClasses().get(0).getName(), "El nombre de la clase interna debe coincidir");
+        assertEquals("Outer.Inner", outer.getInnerClasses().get(0).getQualifiedName());
     }
 
     @Test

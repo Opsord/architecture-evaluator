@@ -1,19 +1,19 @@
-// backend/architecture-evaluator-backend/src/main/java/io/github/opsord/architecture_evaluator_backend/modules/parser/orchestrator/services/OrchestratorService.java
 package io.github.opsord.architecture_evaluator_backend.modules.api.orchestrator.services;
 
+import io.github.opsord.architecture_evaluator_backend.modules.api.orchestrator.instances.ProjectAnalysisInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.ClassInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.LayerAnnotation;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.file_instance.FileInstance;
+import io.github.opsord.architecture_evaluator_backend.modules.api.parser.services.class_instance.ClassVisitor;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.services.file_instance.FileInstanceService;
 import io.github.opsord.architecture_evaluator_backend.modules.api.processor.dto.ProcessedClassInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.processor.services.FileAnalysisService;
-import io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.instances.pom.PomFileInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.instances.gradle.GradleFileInstance;
-import io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.services.PomScannerService;
+import io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.instances.pom.PomFileInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.services.GradleScannerService;
+import io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.services.PomScannerService;
 import io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.services.ScannerService;
 import io.github.opsord.architecture_evaluator_backend.modules.api.project_scanner.services.SrcScannerService;
-import io.github.opsord.architecture_evaluator_backend.modules.api.orchestrator.instances.ProjectAnalysisInstance;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -23,11 +23,11 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -58,16 +58,14 @@ public class OrchestratorService {
             throw new IOException("No Java files found in the project");
         }
 
-        // Filter files without tests
         List<FileInstance> fileInstancesWithoutTests = fileInstances.stream()
-                .filter(fi -> !fi.getClasses().isEmpty() && fi.getClasses().stream()
+                .filter(fi -> fi.getClasses() != null && !fi.getClasses().isEmpty() && fi.getClasses().stream()
                         .noneMatch(cls -> cls.getLayerAnnotation() == LayerAnnotation.TESTING))
                 .toList();
 
         Optional<PomFileInstance> pomFileInstance = pomScannerService.scanPomFile(projectRoot);
         Optional<GradleFileInstance> gradleFileInstance = gradleScannerService.scanGradleFile(projectRoot);
 
-        // Populate class dependencies
         populateClassDependencies(fileInstancesWithoutTests);
 
         List<ProcessedClassInstance> processedClasses = analyzeCompilationUnits(
@@ -84,28 +82,67 @@ public class OrchestratorService {
         return projectAnalysisInstance;
     }
 
-    private String determineInternalBasePackage(Optional<PomFileInstance> pomFileInstance, Optional<GradleFileInstance> gradleFileInstance) {
-        if (pomFileInstance.isPresent()) {
-            return pomFileInstance.get().getGroupId();
-        } else if (gradleFileInstance.isPresent()) {
-            return gradleFileInstance.get().getGroup();
-        } else {
-            return "io.github.opsord.architecture_evaluator_backend";
+    private String determineInternalBasePackage(
+            Optional<PomFileInstance> pomFileInstance,
+            Optional<GradleFileInstance> gradleFileInstance,
+            List<FileInstance> projectCompUnits) {
+        if (pomFileInstance != null && pomFileInstance.isPresent()) {
+            String groupId = pomFileInstance.get().getGroupId();
+            if (groupId != null && !groupId.isBlank()) {
+                return groupId;
+            }
         }
+        if (gradleFileInstance != null && gradleFileInstance.isPresent()) {
+            String group = gradleFileInstance.get().getGroup();
+            if (group != null && !group.isBlank()) {
+                return group;
+            }
+        }
+        return inferCommonBasePackage(projectCompUnits);
+    }
+
+    private String inferCommonBasePackage(List<FileInstance> projectCompUnits) {
+        if (projectCompUnits == null || projectCompUnits.isEmpty()) {
+            return null;
+        }
+        List<String[]> validPackages = projectCompUnits.stream()
+                .map(FileInstance::getPackageName)
+                .filter(pkg -> pkg != null && !pkg.isBlank() && !"default".equals(pkg))
+                .distinct()
+                .map(pkg -> pkg.split("\\."))
+                .toList();
+        if (validPackages.isEmpty()) {
+            return null;
+        }
+        String[] first = validPackages.get(0);
+        int commonLen = first.length;
+        for (int i = 1; i < validPackages.size(); i++) {
+            String[] current = validPackages.get(i);
+            int max = Math.min(commonLen, current.length);
+            int matched = 0;
+            while (matched < max && first[matched].equals(current[matched])) {
+                matched++;
+            }
+            commonLen = matched;
+        }
+        if (commonLen < 2) {
+            return null;
+        }
+        return String.join(".", java.util.Arrays.copyOf(first, commonLen));
     }
 
     private List<ProcessedClassInstance> analyzeCompilationUnits(
             List<FileInstance> projectCompUnits,
             Optional<PomFileInstance> pomFileInstance,
             Optional<GradleFileInstance> gradleFileInstance) {
-        String internalBasePackage = determineInternalBasePackage(pomFileInstance, gradleFileInstance);
+        String internalBasePackage = determineInternalBasePackage(pomFileInstance, gradleFileInstance, projectCompUnits);
 
-        // Analyze all files and flatten the list of processed classes
         return projectCompUnits.stream()
                 .flatMap(compilationUnit -> analysisService.analyseFileInstance(
                         compilationUnit,
                         internalBasePackage,
-                        pomFileInstance).stream())
+                        pomFileInstance,
+                        gradleFileInstance).stream())
                 .toList();
     }
 
@@ -117,7 +154,6 @@ public class OrchestratorService {
         projectAnalysisInstance.setServices(filterByLayerAnnotation(processedClasses, LayerAnnotation.SERVICE));
         projectAnalysisInstance.setControllers(filterByLayerAnnotation(processedClasses, LayerAnnotation.CONTROLLER));
         projectAnalysisInstance.setTestClasses(filterByLayerAnnotation(processedClasses, LayerAnnotation.TESTING));
-        // Other classes without any of the above annotations
         List<ProcessedClassInstance> otherClasses = processedClasses.stream()
                 .filter(pci -> pci.getClassInstance().getLayerAnnotation() == LayerAnnotation.OTHER
                         || pci.getClassInstance().getLayerAnnotation() == LayerAnnotation.UNKNOWN)
@@ -136,32 +172,84 @@ public class OrchestratorService {
     }
 
     public void populateClassDependencies(List<FileInstance> allFiles) {
-        // 1. Set classDependencies for each class
-        List<ClassInstance> allClasses = allFiles.stream()
-                .flatMap(f -> f.getClasses().stream())
-                .toList();
-
-        Set<String> projectClassNames = allClasses.stream()
-                .map(ClassInstance::getName)
-                .collect(Collectors.toSet());
-
-        for (ClassInstance cls : allClasses) {
-            cls.setClassDependencies(
-                    fileInstanceService.getDependentClassNamesFromClass(cls, projectClassNames));
+        if (allFiles == null || allFiles.isEmpty()) {
+            return;
         }
 
-        Map<String, List<String>> dependentsByName = new HashMap<>();
-        for (ClassInstance cls : allClasses) {
-            List<String> dependencies = cls.getClassDependencies();
-            if (dependencies == null) {
+        Set<String> projectFqns = new LinkedHashSet<>();
+        Map<String, String> ownerTopLevelFqnByNestedFqn = new HashMap<>();
+
+        for (FileInstance file : allFiles) {
+            if (file.getClasses() == null) {
                 continue;
             }
-            for (String dependency : dependencies) {
-                dependentsByName.computeIfAbsent(dependency, ignored -> new ArrayList<>()).add(cls.getName());
+            for (ClassInstance cls : file.getClasses()) {
+                String clsFqn = resolveClassFqn(cls, file);
+                if (clsFqn != null) {
+                    projectFqns.add(clsFqn);
+                    registerNestedClasses(cls.getInnerClasses(), clsFqn, ownerTopLevelFqnByNestedFqn);
+                }
             }
         }
-        for (ClassInstance cls : allClasses) {
-            cls.setDependentClasses(dependentsByName.getOrDefault(cls.getName(), List.of()));
+
+        Map<String, Set<String>> dependentsByFqn = new HashMap<>();
+        for (FileInstance file : allFiles) {
+            if (file.getClasses() == null) {
+                continue;
+            }
+            for (ClassInstance cls : file.getClasses()) {
+                String clsFqn = resolveClassFqn(cls, file);
+                List<String> dependencies = fileInstanceService.getDependentClassFqns(
+                        cls, file, projectFqns, ownerTopLevelFqnByNestedFqn);
+                cls.setClassDependencies(dependencies);
+
+                if (dependencies != null && clsFqn != null) {
+                    for (String dependencyFqn : dependencies) {
+                        dependentsByFqn.computeIfAbsent(dependencyFqn, ignored -> new LinkedHashSet<>()).add(clsFqn);
+                    }
+                }
+            }
+        }
+
+        for (FileInstance file : allFiles) {
+            if (file.getClasses() == null) {
+                continue;
+            }
+            for (ClassInstance cls : file.getClasses()) {
+                String clsFqn = resolveClassFqn(cls, file);
+                Set<String> dependents = clsFqn != null ? dependentsByFqn.get(clsFqn) : null;
+                cls.setDependentClasses(dependents != null ? new ArrayList<>(dependents) : List.of());
+            }
+        }
+    }
+
+    private String resolveClassFqn(ClassInstance cls, FileInstance file) {
+        if (cls == null) {
+            return null;
+        }
+        if (cls.getQualifiedName() != null && !cls.getQualifiedName().isBlank()) {
+            return cls.getQualifiedName();
+        }
+        String pkg = file != null ? file.getPackageName() : cls.getPackageName();
+        return ClassVisitor.buildQualifiedName(pkg, cls.getName());
+    }
+
+    private void registerNestedClasses(
+            List<ClassInstance> nestedClasses,
+            String ownerTopLevelFqn,
+            Map<String, String> ownerTopLevelFqnByNestedFqn) {
+        if (nestedClasses == null) {
+            return;
+        }
+        for (ClassInstance nested : nestedClasses) {
+            if (nested == null) {
+                continue;
+            }
+            String nestedFqn = nested.getQualifiedName();
+            if (nestedFqn != null && !nestedFqn.isBlank()) {
+                ownerTopLevelFqnByNestedFqn.put(nestedFqn, ownerTopLevelFqn);
+            }
+            registerNestedClasses(nested.getInnerClasses(), ownerTopLevelFqn, ownerTopLevelFqnByNestedFqn);
         }
     }
 }

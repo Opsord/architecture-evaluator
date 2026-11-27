@@ -50,4 +50,58 @@ class GradleScannerServiceTest {
         Optional<GradleFileInstance> result = gradleScannerService.scanGradleFile(tempDir);
         assertTrue(result.isEmpty());
     }
+
+    @Test
+    void testScanGradleFile_kotlinDslToolchainBomAndSettings() throws Exception {
+        File tempDir = java.nio.file.Files.createTempDirectory("gradlekts").toFile();
+        try (FileWriter fw = new FileWriter(new File(tempDir, "build.gradle.kts"))) {
+            fw.write("""
+                plugins {
+                    id("org.springframework.boot") version "3.4.5"
+                }
+                // group = "com.ignored"
+                project.group = "com.acme.app"
+                version = "2.1.0"
+                java {
+                    toolchain {
+                        languageVersion = JavaLanguageVersion.of(21)
+                    }
+                }
+                dependencies {
+                    implementation("org.springframework.boot:spring-boot-starter-web")
+                    implementation("com.fasterxml.jackson.core:jackson-databind:2.18.0")
+                }
+                """);
+        }
+        try (FileWriter fw = new FileWriter(new File(tempDir, "settings.gradle.kts"))) {
+            fw.write("rootProject.name = \"acme-service\"\n");
+        }
+
+        Optional<GradleFileInstance> result = gradleScannerService.scanGradleFile(tempDir);
+        assertTrue(result.isPresent());
+        GradleFileInstance gradle = result.get();
+        assertEquals("com.acme.app", gradle.getGroup());
+        assertEquals("acme-service", gradle.getName());
+        assertEquals("2.1.0", gradle.getVersion());
+        assertEquals("21", gradle.getJavaVersion());
+        assertEquals(2, gradle.getDependencies().size());
+        assertEquals("org.springframework.boot", gradle.getDependencies().get(0).getGroup());
+        assertNull(gradle.getDependencies().get(0).getVersion());
+        assertEquals("2.18.0", gradle.getDependencies().get(1).getVersion());
+    }
+
+    @Test
+    void testScanGradleFile_javaVersionEnumAndLegacyVersion18() throws Exception {
+        File dir17 = java.nio.file.Files.createTempDirectory("gradle17").toFile();
+        try (FileWriter fw = new FileWriter(new File(dir17, "build.gradle"))) {
+            fw.write("sourceCompatibility = JavaVersion.VERSION_17\n");
+        }
+        assertEquals("17", gradleScannerService.scanGradleFile(dir17).orElseThrow().getJavaVersion());
+
+        File dir8 = java.nio.file.Files.createTempDirectory("gradle8").toFile();
+        try (FileWriter fw = new FileWriter(new File(dir8, "build.gradle"))) {
+            fw.write("sourceCompatibility = JavaVersion.VERSION_1_8\n");
+        }
+        assertEquals("8", gradleScannerService.scanGradleFile(dir8).orElseThrow().getJavaVersion());
+    }
 }

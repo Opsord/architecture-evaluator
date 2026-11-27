@@ -43,7 +43,7 @@ class FileAnalysisServiceTest {
         fileInstance.setClasses(List.of(class1, class2));
 
         Map<ImportCategory, List<String>> classifiedDeps = Map.of(ImportCategory.JAVA_STANDARD, List.of("java.util.List"));
-        when(importClassifierService.classifyDependencies(any(), eq(fileInstance), anyString())).thenReturn(classifiedDeps);
+        when(importClassifierService.classifyDependencies(any(), any(), eq(fileInstance), any())).thenReturn(classifiedDeps);
 
         // Mock ClassAnalysisInstance
         when(classAnalysisService.analyseClassInstance(any(), eq(classifiedDeps))).thenAnswer(invocation -> {
@@ -90,5 +90,32 @@ class FileAnalysisServiceTest {
 
         assertNotNull(result);
         assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void testAnalyseFileInstance_countsRecordEnumAbstractClassAndAnnotation() {
+        ClassInstance rec = new ClassInstance();
+        rec.setJavaFileType(JavaFileType.RECORD);
+        ClassInstance en = new ClassInstance();
+        en.setJavaFileType(JavaFileType.ENUM);
+        ClassInstance abs = new ClassInstance();
+        abs.setJavaFileType(JavaFileType.ABSTRACT_CLASS);
+        ClassInstance ann = new ClassInstance();
+        ann.setJavaFileType(JavaFileType.ANNOTATION);
+
+        FileInstance fileInstance = new FileInstance();
+        fileInstance.setClasses(List.of(rec, en, abs, ann));
+
+        when(importClassifierService.classifyDependencies(any(), any(), eq(fileInstance), any()))
+                .thenReturn(Map.of());
+        when(classAnalysisService.analyseClassInstance(any(), any()))
+                .thenAnswer(inv -> new ClassAnalysisInstance());
+
+        List<ProcessedClassInstance> result = fileAnalysisService.analyseFileInstance(
+                fileInstance, "com.example", Optional.empty(), Optional.empty());
+
+        assertEquals(4, result.size());
+        assertEquals(3, result.get(0).getClassAnalysisInstance().getClassCount());
+        assertEquals(1, result.get(0).getClassAnalysisInstance().getInterfaceCount());
     }
 }

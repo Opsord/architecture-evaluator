@@ -92,4 +92,95 @@ class MethodVisitorTest {
         assertEquals("name", method.getInputParameters().get(0).getName());
         assertEquals("String", method.getInputParameters().get(0).getType());
     }
+
+    @Test
+    void testLexicalBodyAnalyzerHandlesShadowingSuperSwitchFallThroughAndJacksonIsStatic() throws Exception {
+        var parser = new com.github.javaparser.JavaParser(
+                new com.github.javaparser.ParserConfiguration()
+                        .setLanguageLevel(com.github.javaparser.ParserConfiguration.LanguageLevel.JAVA_21));
+        String source = """
+            class Sample {
+                private String name;
+                private java.util.List<String> items;
+                private int counter;
+
+                public void exercise(Object obj, int code) {
+                    int x = super.counter;
+                    for (String items : items) {
+                        System.out.println(items);
+                    }
+                    if (obj instanceof String name) {
+                        System.out.println(name);
+                    } else {
+                        System.out.println(this.name);
+                    }
+                    try (AutoCloseable counter = null) {
+                        System.out.println(counter);
+                    } catch (Exception e) {
+                        System.out.println(this.counter);
+                    }
+                    switch (code) {
+                        case 1:
+                            int local = 1;
+                            break;
+                        case 2:
+                            local = 2;
+                            break;
+                    }
+                }
+
+                public static void helper() {}
+            }
+            """;
+        CompilationUnit cu = parser.parse(source).getResult().orElseThrow();
+        ClassOrInterfaceDeclaration clazz = cu.getClassByName("Sample").orElseThrow();
+
+        List<MethodInstance> methods = new ArrayList<>();
+        MethodVisitor visitor = new MethodVisitor(
+                new StatementService(),
+                java.util.Map.of("name", "String", "items", "List<String>", "counter", "int"),
+                "Sample");
+        clazz.accept(visitor, methods);
+
+        assertEquals(2, methods.size());
+        MethodInstance exercise = methods.get(0);
+        List<String> accessedInstanceFields = exercise.getMethodVariables().stream()
+                .filter(v -> "instance".equals(v.getScope()))
+                .map(io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.VariableInstance::getName)
+                .toList();
+        assertTrue(accessedInstanceFields.contains("items"));
+        assertTrue(accessedInstanceFields.contains("name"));
+        assertTrue(accessedInstanceFields.contains("counter"));
+
+        MethodInstance staticHelper = methods.get(1);
+        assertTrue(staticHelper.getBasicInfo().isStatic());
+        String json = new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(staticHelper.getBasicInfo());
+        assertTrue(json.contains("\"isStatic\":true"), "Expected Jackson to serialize isStatic, got: " + json);
+    }
+
+    @Test
+    void testSuperFieldAccessAloneDoesNotCountAsThisFieldAccess() {
+        String source = """
+            class Child extends Parent {
+                private int count;
+                void readSuper() {
+                    int y = super.count;
+                }
+            }
+            """;
+        CompilationUnit cu = StaticJavaParser.parse(source);
+        ClassOrInterfaceDeclaration clazz = cu.getClassByName("Child").orElseThrow();
+
+        List<MethodInstance> methods = new ArrayList<>();
+        MethodVisitor visitor = new MethodVisitor(
+                new StatementService(),
+                java.util.Map.of("count", "int"),
+                "Child");
+        clazz.accept(visitor, methods);
+
+        long instanceAccesses = methods.get(0).getMethodVariables().stream()
+                .filter(v -> "instance".equals(v.getScope()))
+                .count();
+        assertEquals(0, instanceAccesses);
+    }
 }

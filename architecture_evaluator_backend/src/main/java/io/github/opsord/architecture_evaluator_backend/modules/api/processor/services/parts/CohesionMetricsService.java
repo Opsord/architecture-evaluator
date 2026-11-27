@@ -19,40 +19,37 @@ public class CohesionMetricsService {
 
     public CohesionMetricsDTO calculateCohesionMetrics(ClassInstance classInstance) {
         CohesionMetricsDTO metrics = new CohesionMetricsDTO();
+        if (classInstance == null) {
+            return metrics;
+        }
 
-        // Cache core data
-        List<MethodInstance> methods = classInstance.getMethods();
-        List<VariableInstance> vars = classInstance.getClassVariables().stream()
+        // Exclude static methods from cohesion (they cannot access instance fields)
+        List<MethodInstance> allMethods = classInstance.getMethods() != null
+                ? classInstance.getMethods()
+                : Collections.emptyList();
+        List<MethodInstance> methods = allMethods.stream()
+                .filter(m -> m.getBasicInfo() == null || !m.getBasicInfo().isStatic())
+                .toList();
+
+        List<VariableInstance> allVars = classInstance.getClassVariables() != null
+                ? classInstance.getClassVariables()
+                : Collections.emptyList();
+        List<VariableInstance> vars = allVars.stream()
                 .filter(variableInstance -> INSTANCE_SCOPE.equals(variableInstance.getScope()))
                 .toList();
 
         // Precompute field-sharing adjacency
         boolean[][] fieldGraph = buildFieldAdjacency(methods, vars);
 
-        // Section: LCOM1
         metrics.setLackOfCohesion1(calculateLCOM1(fieldGraph));
-        // Section: LCOM2
         metrics.setLackOfCohesion2(calculateLCOM2(fieldGraph));
-        // Section: LCOM3
         metrics.setLackOfCohesion3(calculateLCOM3(fieldGraph));
-        // Section: LCOM4
         metrics.setLackOfCohesion4(calculateLCOM3(mergeCallGraph(fieldGraph, methods)));
-        // Section: LCOM5
         metrics.setLackOfCohesion5(calculateLCOM5(methods, vars));
 
         return metrics;
     }
 
-    // -------------------------------------------------------------------------
-    // LCOM1
-    // -------------------------------------------------------------------------
-
-    /**
-     * Calculates LCOM1: number of method pairs that do NOT share instance variables.
-     *
-     * @param graph Adjacency matrix where graph[i][j] = true if methods i and j share at least one instance field.
-     * @return The count of method pairs without shared attributes.
-     */
     private int calculateLCOM1(boolean[][] graph) {
         int disconnectedPairs = 0;
         int n = graph.length;
@@ -68,23 +65,9 @@ public class CohesionMetricsService {
         return disconnectedPairs;
     }
 
-    // -------------------------------------------------------------------------
-    // LCOM2
-    // -------------------------------------------------------------------------
-
-    /**
-     * Calculates LCOM2 as defined by Chidamber & Kemerer (1994):
-     * LCOM2 = |P| - |Q| if |P| > |Q|, otherwise 0.
-     * Where:
-     *   - P = number of method pairs with no shared attributes
-     *   - Q = number of method pairs with shared attributes
-     *
-     * @param graph Adjacency matrix where graph[i][j] = true if methods i and j share at least one instance field.
-     * @return LCOM2 value as an integer.
-     */
     private int calculateLCOM2(boolean[][] graph) {
-        int disconnected = 0; // P
-        int connected = 0;    // Q
+        int disconnected = 0;
+        int connected = 0;
         int n = graph.length;
 
         for (int i = 0; i < n; i++) {
@@ -100,42 +83,18 @@ public class CohesionMetricsService {
         return Math.max(disconnected - connected, 0);
     }
 
-    // -------------------------------------------------------------------------
-    // LCOM3
-    // -------------------------------------------------------------------------
-
-    /**
-     * Calculates LCOM3 as the number of connected components in the
-     * method-variable interaction graph.
-     * Each method is a node, and there is an undirected edge between two
-     * methods if they share at least one instance variable.
-     *
-     * @param graph adjacency matrix where graph[i][j] = true if method i and j share a variable
-     * @return number of connected components
-     */
     private int calculateLCOM3(boolean[][] graph) {
         return countConnectedComponents(graph);
     }
 
-
-    // -------------------------------------------------------------------------
-    // LCOM4: extend with call-graph
-    // -------------------------------------------------------------------------
-
-    /**
-     * Combines method-variable adjacency with method-call relations to build
-     * the graph used in LCOM4.
-     */
     private boolean[][] mergeCallGraph(boolean[][] baseGraph, List<MethodInstance> methods) {
         int n = methods.size();
         boolean[][] graph = new boolean[n][n];
 
-        // Copy field-sharing adjacency
         for (int i = 0; i < n; i++) {
             graph[i] = Arrays.copyOf(baseGraph[i], n);
         }
 
-        // Add method-call edges (undirected)
         for (int i = 0; i < n; i++) {
             Set<String> calls = extractCalledNames(methods.get(i));
             for (int j = 0; j < n; j++) {
@@ -149,6 +108,12 @@ public class CohesionMetricsService {
     }
 
     private Set<String> extractCalledNames(MethodInstance methodInstance) {
+        if (methodInstance.getInvokedMethods() != null) {
+            return methodInstance.getInvokedMethods().stream()
+                    .filter(Objects::nonNull)
+                    .filter(name -> !name.isBlank())
+                    .collect(Collectors.toSet());
+        }
         if (methodInstance.getStatementsInfo() == null
                 || methodInstance.getStatementsInfo().getStatements() == null) {
             return Collections.emptySet();
@@ -164,55 +129,42 @@ public class CohesionMetricsService {
                 .collect(Collectors.toSet());
     }
 
-    // -------------------------------------------------------------------------
-    // LCOM5: normalized cohesion index [0..1]
-    // -------------------------------------------------------------------------
-
     /**
-     * Calculates LCOM5: a normalized cohesion index in [0, 1].
-     * LCOM5 = 1 - (sum of distinct attributes accessed by each method) / (m × a)
-     * <p>
-     * A lower LCOM5 indicates higher cohesion.
-     *
-     * @param methods list of methods in the class
-     * @param vars    list of instance attributes in the class
-     * @return normalized LCOM5 value
+     * Calculates LCOM5 as defined by Henderson-Sellers (1996):
+     * LCOM5 = (m - (1/a) * sum(mu(Aj))) / (m - 1)
      */
     private double calculateLCOM5(List<MethodInstance> methods, List<VariableInstance> vars) {
         int m = methods.size();
-        int a = (int) vars.stream()
-                .filter(v -> INSTANCE_SCOPE.equals(v.getScope()))
-                .count();
+        int a = vars.size();
 
-        if (m == 0 || a == 0)
+        if (m <= 1 || a == 0) {
             return 0.0;
+        }
 
         Set<String> attributeNames = vars.stream()
-                .filter(v -> INSTANCE_SCOPE.equals(v.getScope()))
                 .map(VariableInstance::getName)
                 .collect(Collectors.toSet());
 
         long sumDistinctAccesses = methods.stream()
-                .mapToLong(method -> method.getMethodVariables().stream()
-                        .filter(v -> INSTANCE_SCOPE.equals(v.getScope()))
-                        .map(VariableInstance::getName)
-                        .filter(attributeNames::contains)
-                        .distinct()
-                        .count())
+                .mapToLong(method -> {
+                    List<VariableInstance> methodVars = method.getMethodVariables();
+                    if (methodVars == null) {
+                        return 0L;
+                    }
+                    return methodVars.stream()
+                            .filter(v -> INSTANCE_SCOPE.equals(v.getScope()))
+                            .map(VariableInstance::getName)
+                            .filter(attributeNames::contains)
+                            .distinct()
+                            .count();
+                })
                 .sum();
 
-        double lcom5 = 1.0 - (sumDistinctAccesses / (double) (m * a));
-        return Math.max(0.0, lcom5); // prevent rounding underflow
+        double meanAccessPerAttribute = (double) sumDistinctAccesses / a;
+        double lcom5 = (m - meanAccessPerAttribute) / (m - 1);
+        return Math.max(0.0, lcom5);
     }
 
-    // -------------------------------------------------------------------------
-    // Graph & utility methods
-    // -------------------------------------------------------------------------
-
-    /**
-     * Builds an undirected adjacency matrix where
-     * graph[i][j] == true iff methods i and j share at least one instance field.
-     */
     private boolean[][] buildFieldAdjacency(List<MethodInstance> methods, List<VariableInstance> vars) {
         int numberOfMethods = methods.size();
         boolean[][] adj = new boolean[numberOfMethods][numberOfMethods];
@@ -220,15 +172,20 @@ public class CohesionMetricsService {
                 .map(VariableInstance::getName)
                 .collect(Collectors.toSet());
 
-        // Precompute the set of fields used by each method
         List<Set<String>> usedFields = methods.stream()
-                .map(m -> m.getMethodVariables().stream()
-                        .map(VariableInstance::getName)
-                        .filter(varNames::contains)
-                        .collect(Collectors.toSet()))
+                .map(m -> {
+                    List<VariableInstance> methodVars = m.getMethodVariables();
+                    if (methodVars == null) {
+                        return Collections.<String>emptySet();
+                    }
+                    return methodVars.stream()
+                            .filter(v -> INSTANCE_SCOPE.equals(v.getScope()))
+                            .map(VariableInstance::getName)
+                            .filter(varNames::contains)
+                            .collect(Collectors.toSet());
+                })
                 .toList();
 
-        // Build adjacency by set intersection
         for (int i = 0; i < numberOfMethods; i++) {
             for (int j = i + 1; j < numberOfMethods; j++) {
                 Set<String> intersection = new HashSet<>(usedFields.get(i));

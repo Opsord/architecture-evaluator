@@ -41,6 +41,11 @@ public class SrcScannerService {
         return javaFiles;
     }
 
+    /**
+     * Prioritizes {@code src/main/java} when present to analyze production code quickly and avoid
+     * inflating analysis times with large test suites. Falls back to {@code src/} for flat layouts
+     * without a standard Maven/Gradle {@code src/main/java} directory.
+     */
     private File resolveJavaSourceRoot(File srcFolder) {
         File mainJava = new File(srcFolder, "main/java");
         if (mainJava.isDirectory()) {

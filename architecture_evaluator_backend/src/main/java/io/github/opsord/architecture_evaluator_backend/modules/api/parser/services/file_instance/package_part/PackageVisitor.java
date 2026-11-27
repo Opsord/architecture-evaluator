@@ -8,9 +8,23 @@ import java.util.List;
 
 public class PackageVisitor extends VoidVisitorAdapter<List<String>> {
 
+    private final boolean collectStatic;
+
+    public PackageVisitor() {
+        this(false);
+    }
+
+    public PackageVisitor(boolean collectStatic) {
+        this.collectStatic = collectStatic;
+    }
+
     @Override
     public void visit(ImportDeclaration importDeclaration, List<String> collector) {
         super.visit(importDeclaration, collector);
-        collector.add(importDeclaration.getName().asString());
+        if (importDeclaration.isStatic() != collectStatic) {
+            return;
+        }
+        String name = importDeclaration.getName().asString();
+        collector.add(importDeclaration.isAsterisk() ? name + ".*" : name);
     }
 }

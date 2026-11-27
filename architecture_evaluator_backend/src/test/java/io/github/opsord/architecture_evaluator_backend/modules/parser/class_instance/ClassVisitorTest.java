@@ -80,14 +80,13 @@ class ClassVisitorTest {
         CompilationUnit cu = StaticJavaParser.parse(source);
         List<ClassInstance> result = classService.getClassesFromCompUnit(cu);
 
-        // Only test the main class
-        ClassInstance instance = result.stream()
-                .filter(ci -> "MyService".equals(ci.getName()))
-                .findFirst()
-                .orElseThrow();
+        assertEquals(1, result.size());
+        ClassInstance instance = result.get(0);
 
         // --- Identity ---
         assertEquals("MyService", instance.getName());
+        assertEquals("com.example", instance.getPackageName());
+        assertEquals("com.example.MyService", instance.getQualifiedName());
         assertEquals(JavaFileType.CLASS, instance.getJavaFileType());
         assertEquals(LayerAnnotation.SERVICE, instance.getLayerAnnotation());
 
@@ -97,6 +96,7 @@ class ClassVisitorTest {
 
         // --- Annotations ---
         assertTrue(instance.getAnnotations().contains("Service"));
+        assertFalse(instance.getAnnotations().contains("Override"));
 
         // --- Variables, methods, constructor ---
         assertEquals(1, instance.getClassVariables().size());
@@ -149,6 +149,39 @@ class ClassVisitorTest {
         assertEquals(LayerAnnotation.CONTROLLER, result.get(2).getLayerAnnotation());
         assertEquals(LayerAnnotation.CONTROLLER, result.get(3).getLayerAnnotation());
         assertEquals(LayerAnnotation.DOCUMENT, result.get(4).getLayerAnnotation());
+    }
+
+    @Test
+    void testJava21TypesRecordEnumAnnotationAndAbstractClass() {
+        var parser = new com.github.javaparser.JavaParser(
+                new com.github.javaparser.ParserConfiguration()
+                        .setLanguageLevel(com.github.javaparser.ParserConfiguration.LanguageLevel.JAVA_21));
+        String source = """
+            package com.acme.types;
+
+            public record UserDto(Long id, String name) {
+                public UserDto {
+                    if (id == null) throw new IllegalArgumentException();
+                }
+            }
+            enum Status { OPEN, CLOSED }
+            @interface CustomTag {}
+            abstract class BaseHandler {}
+        """;
+
+        CompilationUnit cu = parser.parse(source).getResult().orElseThrow();
+        List<ClassInstance> result = classService.getClassesFromCompUnit(cu);
+
+        assertEquals(4, result.size());
+        assertEquals(JavaFileType.RECORD, result.get(0).getJavaFileType());
+        assertEquals("com.acme.types.UserDto", result.get(0).getQualifiedName());
+        assertEquals(2, result.get(0).getClassVariables().size());
+        assertEquals(1, result.get(0).getConstructors().size());
+        assertEquals(2, result.get(0).getConstructors().get(0).getParameters().size());
+
+        assertEquals(JavaFileType.ENUM, result.get(1).getJavaFileType());
+        assertEquals(JavaFileType.ANNOTATION, result.get(2).getJavaFileType());
+        assertEquals(JavaFileType.ABSTRACT_CLASS, result.get(3).getJavaFileType());
     }
 
 }

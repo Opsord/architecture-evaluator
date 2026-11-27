@@ -19,4 +19,5 @@ public class MethodInstance {
     private List<ParameterInstance> outputParameters;
     private MethodMetrics methodMetrics;
     private List<VariableInstance> methodVariables;
+    private List<String> invokedMethods;
 }

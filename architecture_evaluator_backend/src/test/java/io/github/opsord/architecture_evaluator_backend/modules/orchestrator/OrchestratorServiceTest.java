@@ -74,8 +74,8 @@ class OrchestratorServiceTest {
         when(srcScannerService.parseJavaFiles(srcFiles, projectRoot)).thenReturn(fileInstances);
         when(pomScannerService.scanPomFile(any())).thenReturn(Optional.empty());
         when(gradleScannerService.scanGradleFile(any())).thenReturn(Optional.empty());
-        when(analysisService.analyseFileInstance(any(), any(), any())).thenReturn(List.of(processed));
-        when(fileInstanceService.getDependentClassNamesFromClass(any(), anySet())).thenReturn(List.of());
+        when(analysisService.analyseFileInstance(any(), any(), any(), any())).thenReturn(List.of(processed));
+        when(fileInstanceService.getDependentClassFqns(any(), any(), anySet(), anyMap())).thenReturn(List.of());
 
         ProjectAnalysisInstance result = orchestratorService.orchestrateProjectAnalysis("testProject");
 
@@ -141,18 +141,28 @@ class OrchestratorServiceTest {
 
     @Test
     void testPopulateClassDependencies_setsDependenciesAndDependents() {
-        ClassInstance a = new ClassInstance(); a.setName("A");
-        ClassInstance b = new ClassInstance(); b.setName("B");
-        FileInstance fileA = new FileInstance(); fileA.setClasses(List.of(a));
-        FileInstance fileB = new FileInstance(); fileB.setClasses(List.of(b));
+        ClassInstance a = new ClassInstance();
+        a.setName("A");
+        a.setQualifiedName("com.example.A");
+        ClassInstance b = new ClassInstance();
+        b.setName("B");
+        b.setQualifiedName("com.example.B");
+        FileInstance fileA = new FileInstance();
+        fileA.setPackageName("com.example");
+        fileA.setClasses(List.of(a));
+        FileInstance fileB = new FileInstance();
+        fileB.setPackageName("com.example");
+        fileB.setClasses(List.of(b));
         List<FileInstance> allFiles = List.of(fileA, fileB);
 
-        when(fileInstanceService.getDependentClassNamesFromClass(eq(a), anySet())).thenReturn(List.of("B"));
-        when(fileInstanceService.getDependentClassNamesFromClass(eq(b), anySet())).thenReturn(List.of());
+        when(fileInstanceService.getDependentClassFqns(eq(a), eq(fileA), anySet(), anyMap()))
+                .thenReturn(List.of("com.example.B"));
+        when(fileInstanceService.getDependentClassFqns(eq(b), eq(fileB), anySet(), anyMap()))
+                .thenReturn(List.of());
 
         orchestratorService.populateClassDependencies(allFiles);
 
-        assertEquals(List.of("B"), a.getClassDependencies());
-        assertEquals(List.of("A"), b.getDependentClasses());
+        assertEquals(List.of("com.example.B"), a.getClassDependencies());
+        assertEquals(List.of("com.example.A"), b.getDependentClasses());
     }
 }

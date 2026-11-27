@@ -14,6 +14,7 @@ public class FileInstance {
 
     // --- File-level Annotations & Imports ---
     private List<String> importedPackages;
+    private List<String> staticImports;
     private List<String> fileAnnotations; // e.g. @SpringBootApplication
 
     // --- Contained Types ---

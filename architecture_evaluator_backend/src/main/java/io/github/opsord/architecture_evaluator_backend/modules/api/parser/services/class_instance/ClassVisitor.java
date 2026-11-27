@@ -1,11 +1,27 @@
 package io.github.opsord.architecture_evaluator_backend.modules.api.parser.services.class_instance;
 
+import com.github.javaparser.ast.body.AnnotationDeclaration;
+import com.github.javaparser.ast.body.BodyDeclaration;
 import com.github.javaparser.ast.body.ClassOrInterfaceDeclaration;
+import com.github.javaparser.ast.body.EnumDeclaration;
+import com.github.javaparser.ast.body.MethodDeclaration;
+import com.github.javaparser.ast.body.RecordDeclaration;
+import com.github.javaparser.ast.body.TypeDeclaration;
+import com.github.javaparser.ast.expr.AnnotationExpr;
+import com.github.javaparser.ast.expr.Expression;
+import com.github.javaparser.ast.expr.FieldAccessExpr;
+import com.github.javaparser.ast.expr.MarkerAnnotationExpr;
+import com.github.javaparser.ast.expr.MethodCallExpr;
+import com.github.javaparser.ast.expr.NameExpr;
+import com.github.javaparser.ast.expr.NormalAnnotationExpr;
+import com.github.javaparser.ast.expr.SingleMemberAnnotationExpr;
 import com.github.javaparser.ast.nodeTypes.NodeWithSimpleName;
+import com.github.javaparser.ast.type.ClassOrInterfaceType;
 import com.github.javaparser.ast.visitor.VoidVisitorAdapter;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.ClassInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.JavaFileType;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.LayerAnnotation;
+import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.VariableInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.services.class_instance.parts.annotation.AnnotationService;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.services.class_instance.parts.constructor.ConstructorService;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.services.class_instance.parts.exception_handler.ExceptionHandlerService;
@@ -16,8 +32,10 @@ import io.github.opsord.architecture_evaluator_backend.modules.api.parser.servic
 import lombok.RequiredArgsConstructor;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 @RequiredArgsConstructor
@@ -31,207 +49,316 @@ public class ClassVisitor extends VoidVisitorAdapter<List<ClassInstance>> {
     private final InterfaceService interfaceService;
     private final ExceptionHandlerService exceptionHandlerService;
 
-    private static final List<String> ENTITY_ANNOTATIONS = List.of("Entity");
-    private static final List<String> DOCUMENT_ANNOTATIONS = List.of("Document");
-    private static final List<String> SERVICE_ANNOTATIONS = List.of("Service");
-    private static final List<String> REPOSITORY_ANNOTATIONS = List.of("Repository");
-    private static final List<String> CONTROLLER_ANNOTATIONS = List.of("Controller", "RestController");
-    private static final List<String> TESTING_ANNOTATIONS = List.of("SpringBootTest", "Test");
+    private static final Set<String> ENTITY_ANNOTATIONS = Set.of("Entity");
+    private static final Set<String> DOCUMENT_ANNOTATIONS = Set.of("Document");
+    private static final Set<String> SERVICE_ANNOTATIONS = Set.of("Service");
+    private static final Set<String> REPOSITORY_ANNOTATIONS = Set.of("Repository");
+    private static final Set<String> CONTROLLER_ANNOTATIONS = Set.of("Controller", "RestController");
+    private static final Set<String> TESTING_CLASS_ANNOTATIONS = Set.of(
+            "SpringBootTest", "WebMvcTest", "DataJpaTest", "ExtendWith", "Test");
+    private static final Set<String> TESTING_METHOD_ANNOTATIONS = Set.of(
+            "Test", "ParameterizedTest", "RepeatedTest");
 
-    /**
-     * Visits a class or interface declaration and populates a ClassInstance with its details.
-     * @param declaration The class or interface declaration node.
-     * @param collector The list to collect ClassInstance objects.
-     */
+    public static String buildQualifiedName(String packageName, String name) {
+        if (name == null) {
+            return null;
+        }
+        if (packageName == null || packageName.isBlank() || "default".equals(packageName)) {
+            return name;
+        }
+        return packageName + "." + name;
+    }
+
     @Override
     public void visit(ClassOrInterfaceDeclaration declaration, List<ClassInstance> collector) {
-        super.visit(declaration, collector);
+        if (declaration.isNestedType()) {
+            return;
+        }
+        collector.add(parseType(declaration, resolvePackageName(declaration), null));
+    }
+
+    @Override
+    public void visit(RecordDeclaration declaration, List<ClassInstance> collector) {
+        if (declaration.isNestedType()) {
+            return;
+        }
+        collector.add(parseType(declaration, resolvePackageName(declaration), null));
+    }
+
+    @Override
+    public void visit(EnumDeclaration declaration, List<ClassInstance> collector) {
+        if (declaration.isNestedType()) {
+            return;
+        }
+        collector.add(parseType(declaration, resolvePackageName(declaration), null));
+    }
+
+    @Override
+    public void visit(AnnotationDeclaration declaration, List<ClassInstance> collector) {
+        if (declaration.isNestedType()) {
+            return;
+        }
+        collector.add(parseType(declaration, resolvePackageName(declaration), null));
+    }
+
+    public ClassInstance parseType(TypeDeclaration<?> declaration, String packageName, String parentFqn) {
         ClassInstance instance = new ClassInstance();
-        instance.setName(declaration.getNameAsString());
+        String simpleName = declaration.getNameAsString();
+        instance.setName(simpleName);
+        instance.setPackageName(packageName);
+        String qualifiedName = parentFqn != null
+                ? parentFqn + "." + simpleName
+                : buildQualifiedName(packageName, simpleName);
+        instance.setQualifiedName(qualifiedName);
 
         setJavaFileType(declaration, instance);
         setAnnotationsAndLayer(declaration, instance);
         setExceptionHandling(declaration, instance);
         setInheritance(declaration, instance);
         setMembers(declaration, instance);
-        setInnerClasses(declaration, instance);
+        setInnerClasses(declaration, instance, packageName);
         instance.setUsedClasses(collectUsedClasses(declaration));
         setLinesOfCode(declaration, instance);
 
-        collector.add(instance);
+        return instance;
     }
 
-    /**
-     * Sets the Java file type (class, interface, enum, etc.) for the given instance.
-     * @param declaration The class or interface declaration node.
-     * @param instance The ClassInstance to update.
-     */
-    private void setJavaFileType(ClassOrInterfaceDeclaration declaration, ClassInstance instance) {
-        if (declaration.isInterface()) {
-            instance.setJavaFileType(JavaFileType.INTERFACE);
-        } else if (declaration.isEnumDeclaration()) {
-            instance.setJavaFileType(JavaFileType.ENUM);
-        } else if (declaration.isAnnotationDeclaration()) {
-            instance.setJavaFileType(JavaFileType.ABSTRACT_CLASS);
-        } else {
-            instance.setJavaFileType(JavaFileType.CLASS);
-        }
+    private String resolvePackageName(TypeDeclaration<?> declaration) {
+        return declaration.findCompilationUnit()
+                .flatMap(cu -> cu.getPackageDeclaration().map(pd -> pd.getNameAsString()))
+                .orElse("default");
     }
 
-    /**
-     * Extracts annotations from the class and determines its layer annotation.
-     * @param declaration The class or interface declaration node.
-     * @param instance The ClassInstance to update.
-     */
-    private void setAnnotationsAndLayer(ClassOrInterfaceDeclaration declaration, ClassInstance instance) {
-        instance.setAnnotations(annotationService.getAnnotationsFromClass(declaration));
-        List<String> annotations = instance.getAnnotations();
-        if (annotations != null) {
-            if (annotations.stream().anyMatch(ENTITY_ANNOTATIONS::contains)) {
-                instance.setLayerAnnotation(LayerAnnotation.ENTITY);
-            } else if (annotations.stream().anyMatch(DOCUMENT_ANNOTATIONS::contains)) {
-                instance.setLayerAnnotation(LayerAnnotation.DOCUMENT);
-            } else if (annotations.stream().anyMatch(SERVICE_ANNOTATIONS::contains)) {
-                instance.setLayerAnnotation(LayerAnnotation.SERVICE);
-            } else if (annotations.stream().anyMatch(REPOSITORY_ANNOTATIONS::contains)) {
-                instance.setLayerAnnotation(LayerAnnotation.REPOSITORY);
-            } else if (annotations.stream().anyMatch(CONTROLLER_ANNOTATIONS::contains)) {
-                instance.setLayerAnnotation(LayerAnnotation.CONTROLLER);
-            } else if (annotations.stream().anyMatch(TESTING_ANNOTATIONS::contains)) {
-                instance.setLayerAnnotation(LayerAnnotation.TESTING);
+    private void setJavaFileType(TypeDeclaration<?> declaration, ClassInstance instance) {
+        if (declaration instanceof ClassOrInterfaceDeclaration classDecl) {
+            if (classDecl.isInterface()) {
+                instance.setJavaFileType(JavaFileType.INTERFACE);
+            } else if (classDecl.isAbstract()) {
+                instance.setJavaFileType(JavaFileType.ABSTRACT_CLASS);
             } else {
-                instance.setLayerAnnotation(LayerAnnotation.OTHER);
+                instance.setJavaFileType(JavaFileType.CLASS);
             }
+        } else if (declaration instanceof RecordDeclaration) {
+            instance.setJavaFileType(JavaFileType.RECORD);
+        } else if (declaration instanceof EnumDeclaration) {
+            instance.setJavaFileType(JavaFileType.ENUM);
+        } else if (declaration instanceof AnnotationDeclaration) {
+            instance.setJavaFileType(JavaFileType.ANNOTATION);
         } else {
-            instance.setLayerAnnotation(LayerAnnotation.UNKNOWN);
+            instance.setJavaFileType(JavaFileType.UNKNOWN);
         }
     }
 
-    /**
-     * Sets the superclasses and implemented interfaces for the given instance.
-     * @param declaration The class or interface declaration node.
-     * @param instance The ClassInstance to update.
-     */
-    private void setInheritance(ClassOrInterfaceDeclaration declaration, ClassInstance instance) {
-        instance.setSuperClasses(
-                declaration.getExtendedTypes().stream()
-                        .map(NodeWithSimpleName::getNameAsString)
-                        .toList());
-        instance.setImplementedInterfaces(
-                interfaceService.getImplementedInterfaces(declaration));
+    private void setAnnotationsAndLayer(TypeDeclaration<?> declaration, ClassInstance instance) {
+        List<String> annotations = annotationService.getAnnotationsFromClass(declaration);
+        instance.setAnnotations(annotations);
+        if (annotations == null) {
+            instance.setLayerAnnotation(LayerAnnotation.UNKNOWN);
+            return;
+        }
+        if (annotations.stream().anyMatch(ENTITY_ANNOTATIONS::contains)) {
+            instance.setLayerAnnotation(LayerAnnotation.ENTITY);
+        } else if (annotations.stream().anyMatch(DOCUMENT_ANNOTATIONS::contains)) {
+            instance.setLayerAnnotation(LayerAnnotation.DOCUMENT);
+        } else if (annotations.stream().anyMatch(SERVICE_ANNOTATIONS::contains)) {
+            instance.setLayerAnnotation(LayerAnnotation.SERVICE);
+        } else if (annotations.stream().anyMatch(REPOSITORY_ANNOTATIONS::contains)) {
+            instance.setLayerAnnotation(LayerAnnotation.REPOSITORY);
+        } else if (annotations.stream().anyMatch(CONTROLLER_ANNOTATIONS::contains)) {
+            instance.setLayerAnnotation(LayerAnnotation.CONTROLLER);
+        } else if (annotations.stream().anyMatch(TESTING_CLASS_ANNOTATIONS::contains)
+                || hasDirectTestMethod(declaration)) {
+            instance.setLayerAnnotation(LayerAnnotation.TESTING);
+        } else {
+            instance.setLayerAnnotation(LayerAnnotation.OTHER);
+        }
     }
 
-    /**
-     * Sets the members (methods, statements, variables, constructors) for the given instance.
-     * @param declaration The class or interface declaration node.
-     * @param instance The ClassInstance to update.
-     */
-    private void setMembers(ClassOrInterfaceDeclaration declaration, ClassInstance instance) {
-        instance.setMethods(methodService.getMethods(declaration));
+    private boolean hasDirectTestMethod(TypeDeclaration<?> declaration) {
+        for (BodyDeclaration<?> member : declaration.getMembers()) {
+            if (member instanceof MethodDeclaration method) {
+                boolean isTestMethod = method.getAnnotations().stream()
+                        .map(AnnotationExpr::getNameAsString)
+                        .anyMatch(TESTING_METHOD_ANNOTATIONS::contains);
+                if (isTestMethod) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void setInheritance(TypeDeclaration<?> declaration, ClassInstance instance) {
+        if (declaration instanceof ClassOrInterfaceDeclaration classDecl) {
+            instance.setSuperClasses(
+                    classDecl.getExtendedTypes().stream()
+                            .map(NodeWithSimpleName::getNameAsString)
+                            .toList());
+        } else {
+            instance.setSuperClasses(List.of());
+        }
+        instance.setImplementedInterfaces(interfaceService.getImplementedInterfaces(declaration));
+    }
+
+    private void setMembers(TypeDeclaration<?> declaration, ClassInstance instance) {
+        // Extract class variables FIRST so MethodService receives the exact map of instance fields
+        List<VariableInstance> classVariables = variableService.getVariables(declaration);
+        instance.setClassVariables(classVariables);
+
+        Map<String, String> instanceFieldsByName = new LinkedHashMap<>();
+        if (classVariables != null) {
+            for (VariableInstance var : classVariables) {
+                if ("instance".equals(var.getScope()) && var.getName() != null) {
+                    instanceFieldsByName.put(var.getName(), var.getType());
+                }
+            }
+        }
+
+        instance.setMethods(methodService.getMethods(declaration, instanceFieldsByName, declaration.getNameAsString()));
         instance.setStatements(statementService.getStatements(declaration));
-        instance.setClassVariables(variableService.getVariables(declaration));
         instance.setConstructors(constructorService.getConstructors(declaration));
     }
 
-    /**
-     * Recursively collects and sets inner classes for the given instance.
-     * @param declaration The class or interface declaration node.
-     * @param instance The ClassInstance to update.
-     */
-    private void setInnerClasses(ClassOrInterfaceDeclaration declaration, ClassInstance instance) {
+    private void setInnerClasses(TypeDeclaration<?> declaration, ClassInstance instance, String packageName) {
         List<ClassInstance> innerClasses = new ArrayList<>();
-        declaration.getMembers().forEach(member -> {
-            if (member instanceof ClassOrInterfaceDeclaration inner) {
-                inner.accept(this, innerClasses);
+        for (BodyDeclaration<?> member : declaration.getMembers()) {
+            if (member instanceof TypeDeclaration<?> inner) {
+                innerClasses.add(parseType(inner, packageName, instance.getQualifiedName()));
             }
-        });
+        }
         instance.setInnerClasses(innerClasses);
     }
 
-    /**
-     * Sets the exception handling blocks for the given instance.
-     * @param declaration The class or interface declaration node.
-     * @param instance The ClassInstance to update.
-     */
-    private void setExceptionHandling(ClassOrInterfaceDeclaration declaration, ClassInstance instance) {
+    private void setExceptionHandling(TypeDeclaration<?> declaration, ClassInstance instance) {
         instance.setExceptionHandling(exceptionHandlerService.getExceptionHandling(declaration));
     }
 
-    /**
-     * Sets the lines of code metric for the given instance.
-     * @param declaration The class or interface declaration node.
-     * @param instance The ClassInstance to update.
-     */
-    private void setLinesOfCode(ClassOrInterfaceDeclaration declaration, ClassInstance instance) {
+    private void setLinesOfCode(TypeDeclaration<?> declaration, ClassInstance instance) {
         int linesOfCode = declaration.getRange()
                 .map(range -> range.end.line - range.begin.line + 1)
                 .orElse(0);
         instance.setLinesOfCode(linesOfCode);
     }
 
-    /**
-     * Collects all class names used in the declaration (superclasses, interfaces, fields, methods, constructors).
-     * @param declaration The class or interface declaration node.
-     * @return List of used class names.
-     */
-    private List<String> collectUsedClasses(ClassOrInterfaceDeclaration declaration) {
-        Set<String> usedClasses = new HashSet<>();
-
-        // Superclasses and interfaces
-        declaration.getExtendedTypes().forEach(type -> usedClasses.addAll(extractClassNames(type.getNameAsString())));
-        declaration.getImplementedTypes()
-                .forEach(type -> usedClasses.addAll(extractClassNames(type.getNameAsString())));
-
-        // Field types
-        declaration.getFields().forEach(field -> {
-            String elementType = field.getElementType().asString();
-            usedClasses.addAll(extractClassNames(elementType));
-        });
-
-        // Method return types and parameter types
-        declaration.getMethods().forEach(method -> {
-            usedClasses.addAll(extractClassNames(method.getType().asString()));
-            method.getParameters().forEach(param -> usedClasses.addAll(extractClassNames(param.getType().asString())));
-        });
-
-        // Exception types in method signatures
-        declaration.getMethods().forEach(method ->
-            method.getBody().ifPresent(body ->
-                    body.findAll(com.github.javaparser.ast.stmt.CatchClause.class)
-                            .forEach(catchClause -> {
-                                String exceptionType = catchClause.getParameter().getType().asString();
-                                usedClasses.addAll(extractClassNames(exceptionType));
-                            })
-            )
-        );
-
-        // Constructor parameter types
-        declaration.getConstructors().forEach(constructor -> constructor.getParameters()
-                .forEach(param -> usedClasses.addAll(extractClassNames(param.getType().asString()))));
-
+    private List<String> collectUsedClasses(TypeDeclaration<?> declaration) {
+        Set<String> usedClasses = new LinkedHashSet<>();
+        UsedClassCollector collector = new UsedClassCollector(declaration, usedClasses);
+        declaration.accept(collector, null);
         return new ArrayList<>(usedClasses);
     }
 
-    /**
-     * Utility to extract class names from a type string, including generics.
-     * For example, "List<InstallmentEntity>" returns ["List", "InstallmentEntity"].
-     * @param type The type string.
-     * @return List of class names.
-     */
-    private List<String> extractClassNames(String type) {
-        List<String> result = new ArrayList<>();
-        if (type == null)
-            return result;
-        int genericStart = type.indexOf('<');
-        if (genericStart > 0) {
-            result.add(type.substring(0, genericStart));
-            String inner = type.substring(genericStart + 1, type.lastIndexOf('>'));
-            for (String part : inner.split(",")) {
-                result.addAll(extractClassNames(part.trim()));
-            }
-        } else {
-            result.add(type);
+    private static final class UsedClassCollector extends VoidVisitorAdapter<Void> {
+
+        private final TypeDeclaration<?> root;
+        private final Set<String> usedClasses;
+
+        private UsedClassCollector(TypeDeclaration<?> root, Set<String> usedClasses) {
+            this.root = root;
+            this.usedClasses = usedClasses;
         }
-        return result;
+
+        @Override
+        public void visit(ClassOrInterfaceDeclaration n, Void arg) {
+            if (n != root) {
+                return;
+            }
+            super.visit(n, arg);
+        }
+
+        @Override
+        public void visit(RecordDeclaration n, Void arg) {
+            if (n != root) {
+                return;
+            }
+            super.visit(n, arg);
+        }
+
+        @Override
+        public void visit(EnumDeclaration n, Void arg) {
+            if (n != root) {
+                return;
+            }
+            super.visit(n, arg);
+        }
+
+        @Override
+        public void visit(AnnotationDeclaration n, Void arg) {
+            if (n != root) {
+                return;
+            }
+            super.visit(n, arg);
+        }
+
+        @Override
+        public void visit(ClassOrInterfaceType n, Void arg) {
+            boolean isScopeOfParentType = n.getParentNode()
+                    .filter(ClassOrInterfaceType.class::isInstance)
+                    .map(ClassOrInterfaceType.class::cast)
+                    .flatMap(ClassOrInterfaceType::getScope)
+                    .map(scope -> scope == n)
+                    .orElse(false);
+
+            if (!isScopeOfParentType) {
+                usedClasses.add(n.getNameWithScope());
+            }
+            // Descend into scope so generic arguments on Outer<Foo>.Inner are collected
+            // (isScopeOfParentType prevents emitting raw package/qualifier fragments)
+            n.getScope().ifPresent(s -> s.accept(this, arg));
+            // Always descend into type arguments (handles nested generics and JpaRepository<User, Long>)
+            n.getTypeArguments().ifPresent(args -> args.forEach(t -> t.accept(this, arg)));
+            n.getAnnotations().forEach(a -> a.accept(this, arg));
+        }
+
+        @Override
+        public void visit(MarkerAnnotationExpr n, Void arg) {
+            usedClasses.add(n.getNameAsString());
+            super.visit(n, arg);
+        }
+
+        @Override
+        public void visit(SingleMemberAnnotationExpr n, Void arg) {
+            usedClasses.add(n.getNameAsString());
+            super.visit(n, arg);
+        }
+
+        @Override
+        public void visit(NormalAnnotationExpr n, Void arg) {
+            usedClasses.add(n.getNameAsString());
+            super.visit(n, arg);
+        }
+
+        @Override
+        public void visit(MethodCallExpr n, Void arg) {
+            n.getScope().ifPresent(this::collectStaticTypeScope);
+            super.visit(n, arg);
+        }
+
+        @Override
+        public void visit(FieldAccessExpr n, Void arg) {
+            collectStaticTypeScope(n.getScope());
+            super.visit(n, arg);
+        }
+
+        private void collectStaticTypeScope(Expression scope) {
+            if (scope instanceof NameExpr nameExpr) {
+                String name = nameExpr.getNameAsString();
+                if (!name.isEmpty() && Character.isUpperCase(name.charAt(0))) {
+                    usedClasses.add(name);
+                }
+            } else if (scope instanceof FieldAccessExpr fieldAccess) {
+                String terminal = fieldAccess.getNameAsString();
+                if (!terminal.isEmpty() && Character.isUpperCase(terminal.charAt(0)) && isPureNameChain(fieldAccess)) {
+                    usedClasses.add(fieldAccess.toString());
+                }
+            }
+        }
+
+        private boolean isPureNameChain(Expression expr) {
+            Expression current = expr;
+            while (current instanceof FieldAccessExpr fa) {
+                current = fa.getScope();
+            }
+            return current instanceof NameExpr;
+        }
     }
 }

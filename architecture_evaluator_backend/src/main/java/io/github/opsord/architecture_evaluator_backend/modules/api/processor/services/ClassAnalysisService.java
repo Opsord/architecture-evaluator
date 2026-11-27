@@ -37,8 +37,10 @@ public class ClassAnalysisService {
 
         ClassAnalysisInstance classAnalysisInstance = new ClassAnalysisInstance();
         // Metrics for this class
-        classAnalysisInstance.setProgramMetrics(programMetricsService.generateProgramMetrics(classInstance));
-        classAnalysisInstance.setComplexityMetrics(complexityMetricsService.calculateComplexityMetrics(classInstance));
+        ProgramMetricsDTO programMetrics = programMetricsService.generateProgramMetrics(classInstance);
+        classAnalysisInstance.setProgramMetrics(programMetrics);
+        classAnalysisInstance.setComplexityMetrics(
+                complexityMetricsService.calculateComplexityMetrics(classInstance, programMetrics));
         classAnalysisInstance.setCouplingMetrics(couplingMetricsService.calculateCouplingMetrics(classInstance));
         classAnalysisInstance.setCohesionMetrics(cohesionMetricsService.calculateCohesionMetrics(classInstance));
         classAnalysisInstance.setClassifiedDependencies(classifiedDependencies);
