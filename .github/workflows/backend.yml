@@ -47,3 +47,4 @@ jobs:
           -Pcoverage
           -Dsonar.organization=opsord
           -Dsonar.projectKey=opsord_architecture-evaluator-backend
+          -Dsonar.projectName=Architecture-Evaluator-Backend
