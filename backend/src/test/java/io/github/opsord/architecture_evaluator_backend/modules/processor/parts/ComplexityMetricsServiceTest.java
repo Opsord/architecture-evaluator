@@ -1,0 +1,150 @@
+package io.github.opsord.architecture_evaluator_backend.modules.processor.parts;
+
+import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.ClassInstance;
+import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.ParameterInstance;
+import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.MethodInstance;
+import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.parts.statement.StatementInstance;
+import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.parts.StatementsInfo;
+import io.github.opsord.architecture_evaluator_backend.modules.api.processor.dto.parts.ComplexityMetricsDTO;
+import io.github.opsord.architecture_evaluator_backend.modules.api.processor.services.parts.ComplexityMetricsService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+
+import java.util.Collections;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+class ComplexityMetricsServiceTest {
+
+    private ComplexityMetricsService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new ComplexityMetricsService();
+    }
+
+    private List<StatementInstance> executableStatements(int count) {
+        StatementInstance expr = new StatementInstance();
+        expr.setType(io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.parts.statement.StatementType.EXPRESSION);
+        return Collections.nCopies(count, expr);
+    }
+
+    // Helper to create a MethodInstance with the given properties
+    private MethodInstance method(int numStatements, int numControlStatements, int numInputs, int numOutputs) {
+        MethodInstance methodInstance = new MethodInstance();
+        StatementsInfo statementsInfo = new StatementsInfo();
+        statementsInfo.setStatements(executableStatements(numStatements));
+        statementsInfo.setNumberOfControlStatements(numControlStatements);
+        methodInstance.setStatementsInfo(statementsInfo);
+        methodInstance.setInputParameters(numInputs > 0 ? Collections.nCopies(numInputs, new ParameterInstance()) : null);
+        methodInstance.setOutputParameters(numOutputs > 0 ? Collections.nCopies(numOutputs, new ParameterInstance()) : null);
+        return methodInstance;
+    }
+
+    @Test
+    void testEmptyClass() {
+        ClassInstance classInstance = new ClassInstance();
+        classInstance.setMethods(Collections.emptyList());
+        classInstance.setStatements(Collections.emptyList());
+        classInstance.setLinesOfCode(0);
+
+        ComplexityMetricsDTO dto = service.calculateComplexityMetrics(classInstance);
+        assertEquals(0, dto.getApproxMcCabeCC());
+        assertEquals(0.0, dto.getImprovedCC());
+    }
+
+    @Test
+    void testSingleMethodNoStatements() {
+        MethodInstance m = method(0, 0, 0, 0);
+        ClassInstance classInstance = new ClassInstance();
+        classInstance.setMethods(List.of(m));
+        classInstance.setStatements(Collections.emptyList());
+        classInstance.setLinesOfCode(10);
+
+        ComplexityMetricsDTO dto = service.calculateComplexityMetrics(classInstance);
+        assertEquals(1, dto.getApproxMcCabeCC());
+        assertEquals(0.1, dto.getImprovedCC());
+    }
+
+    @Test
+    void testMultipleMethodsWithStatements() {
+        MethodInstance m1 = method(3, 1, 2, 1); // 3 stmts, 1 control, 2 in, 1 out
+        MethodInstance m2 = method(2, 0, 1, 0); // 2 stmts, 0 control, 1 in, 0 out
+        ClassInstance classInstance = new ClassInstance();
+        classInstance.setMethods(List.of(m1, m2));
+        classInstance.setStatements(executableStatements(5));
+        classInstance.setLinesOfCode(20);
+
+        ComplexityMetricsDTO dto = service.calculateComplexityMetrics(classInstance);
+        assertEquals(3, dto.getApproxMcCabeCC());
+        assertEquals(0.5, dto.getImprovedCC());
+    }
+
+    @Test
+    void testMethodWithOnlyControlStatements() {
+        MethodInstance m = method(0, 3, 0, 0); // 0 stmts, 3 control stmts
+        ClassInstance classInstance = new ClassInstance();
+        classInstance.setMethods(List.of(m));
+        classInstance.setStatements(executableStatements(3));
+        classInstance.setLinesOfCode(15);
+
+        ComplexityMetricsDTO dto = service.calculateComplexityMetrics(classInstance);
+        assertEquals(4, dto.getApproxMcCabeCC());
+        // improvedCC = (1+3+0+0)/15 = 0.266...
+        assertEquals((1+3+0+0)/15.0, dto.getImprovedCC());
+    }
+
+    @Test
+    void testMethodWithInputsAndOutputs() {
+        MethodInstance m = method(1, 0, 4, 2); // 1 stmt, 0 control, 4 in, 2 out
+        ClassInstance classInstance = new ClassInstance();
+        classInstance.setMethods(List.of(m));
+        classInstance.setStatements(executableStatements(1));
+        classInstance.setLinesOfCode(7);
+
+        ComplexityMetricsDTO dto = service.calculateComplexityMetrics(classInstance);
+        assertEquals(1, dto.getApproxMcCabeCC());
+        // improvedCC = (1+1+4+2)/7 = 8/7
+        assertEquals(8.0/7.0, dto.getImprovedCC());
+    }
+
+    @Test
+    void testThrowDoesNotSubtractAndCatchSwitchLogicalTernaryAddComplexity() {
+        MethodInstance m = new MethodInstance();
+        StatementsInfo info = new StatementsInfo();
+        info.setNumberOfControlStatements(2);  // if + for-each
+        info.setNumberOfSwitchCases(3);        // 3 switch cases
+        info.setNumberOfCatchClauses(2);       // 2 catch blocks
+        info.setNumberOfThrowStatements(4);    // throws must NOT subtract
+        info.setNumberOfLogicalOperators(2);   // && and ||
+        info.setNumberOfTernaryOperators(1);   // ?:
+        m.setStatementsInfo(info);
+
+        ClassInstance classInstance = new ClassInstance();
+        classInstance.setMethods(List.of(m));
+        classInstance.setStatements(executableStatements(5));
+        classInstance.setLinesOfCode(25);
+
+        ComplexityMetricsDTO dto = service.calculateComplexityMetrics(classInstance);
+        // CC = 1 + 2 + 3 + 2 + 2 + 1 = 11
+        assertEquals(11, dto.getApproxMcCabeCC());
+        assertEquals(11, dto.getMaxMethodMcCabeCC());
+    }
+
+    @Test
+    void testMethodWithOnlyThrowNeverProducesZeroOrNegativeCC() {
+        MethodInstance m = new MethodInstance();
+        StatementsInfo info = new StatementsInfo();
+        info.setNumberOfThrowStatements(2);
+        m.setStatementsInfo(info);
+
+        ClassInstance classInstance = new ClassInstance();
+        classInstance.setMethods(List.of(m));
+        classInstance.setStatements(executableStatements(2));
+        classInstance.setLinesOfCode(5);
+
+        ComplexityMetricsDTO dto = service.calculateComplexityMetrics(classInstance);
+        assertEquals(1, dto.getApproxMcCabeCC());
+    }
+}

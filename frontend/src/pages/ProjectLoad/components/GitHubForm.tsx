@@ -1,0 +1,69 @@
+import { useEffect, useRef, useState } from 'react'
+import * as React from "react";
+import { useNavigation } from '../../../context/NavigationContext'
+import { analyzeGitHubRepo } from '../../../services/api'
+import { useProjectContext } from '../../../context/ProjectContext'
+
+export default function GitHubForm() {
+    const [repoUrl, setRepoUrl] = useState('')
+    const [isLoading, setIsLoading] = useState(false)
+    const { setCurrentPage } = useNavigation()
+    const { setProjectData } = useProjectContext()
+    const abortRef = useRef<AbortController | null>(null)
+
+    useEffect(() => () => abortRef.current?.abort(), [])
+
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault()
+        if (!repoUrl) return
+
+        abortRef.current?.abort()
+        const controller = new AbortController()
+        abortRef.current = controller
+
+        setIsLoading(true)
+        try {
+            const response = await analyzeGitHubRepo(repoUrl, controller.signal)
+            setProjectData(response.data)
+            setCurrentPage('dashboard')
+        } catch (error) {
+            if (typeof error === 'object' && error !== null && 'code' in error && (error as { code?: string }).code === 'ERR_CANCELED') {
+                return
+            }
+            console.error('Error:', error)
+            alert('Error processing repository')
+        } finally {
+            if (abortRef.current === controller) {
+                setIsLoading(false)
+            }
+        }
+    }
+
+    return (
+        <form onSubmit={handleSubmit} className="space-y-8">
+            <div>
+                <label className="block text-lg font-semibold text-primary mb-2">
+                    GitHub repository URL
+                </label>
+                <input
+                    type="url"
+                    placeholder="https://github.com/user/repository"
+                    value={repoUrl}
+                    onChange={(e) => setRepoUrl(e.target.value)}
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg text-base"
+                />
+            </div>
+            <button
+                type="submit"
+                disabled={!repoUrl || isLoading}
+                className={`w-full py-4 text-xl rounded-lg font-bold transition text-white ${
+                    !repoUrl || isLoading
+                        ? 'bg-gray-400 cursor-not-allowed'
+                        : 'bg-gradient-to-r from-primary to-bright-turquoise-400 hover:scale-105 hover:shadow-xl'
+                }`}
+            >
+                {isLoading ? 'Processing...' : 'Clone and Analyze'}
+            </button>
+        </form>
+    )
+}
