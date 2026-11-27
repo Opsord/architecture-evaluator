@@ -1,17 +1,10 @@
 # AGENTS.md
 
-This repository is the **backend** of Architecture Evaluator. It statically analyzes Java / Spring Boot projects and returns maintainability metrics as JSON.
-
-The Maven project is nested: all build, test, and source work happens in `architecture_evaluator_backend/`.
-
-Sibling repos:
-
-- Parent (git submodules + Docker Compose): https://github.com/Opsord/architecture-evaluator
-- Frontend: https://github.com/Opsord/architecture-evaluator-frontend
+This directory is the **backend** of Architecture Evaluator in the monorepo. It statically analyzes Java / Spring Boot projects and returns maintainability metrics as JSON.
 
 ## Setup and commands
 
-Run from `architecture_evaluator_backend/`:
+Run from `backend/`:
 
 ```bash
 ./mvnw spring-boot:run

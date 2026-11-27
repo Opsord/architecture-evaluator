@@ -1,10 +1,8 @@
-version: '3.8'
-
 services:
   # Backend service (Spring Boot)
   backend:
     build:
-      context: ./backend/architecture_evaluator_backend
+      context: ./backend
       dockerfile: Dockerfile
     container_name: architecture-evaluator-backend
     ports:
@@ -19,13 +17,11 @@ services:
   # Frontend service (React + Nginx)
   frontend:
     build:
-      context: ./frontend/architecture-evaluator-frontend
+      context: ./frontend
       dockerfile: Dockerfile
     container_name: architecture-evaluator-frontend
     ports:
       - "80:80"
-    environment:
-      - REACT_APP_API_URL=http://localhost
     networks:
       - architecture-evaluator-network
     depends_on:
@@ -35,8 +31,3 @@ services:
 networks:
   architecture-evaluator-network:
     driver: bridge
-
-volumes:
-  # Optional: if you want to persist any data
-  backend-data:
-    driver: local

@@ -1,17 +1,10 @@
 # AGENTS.md
 
-This repository is the **frontend** of Architecture Evaluator: a React SPA with a 3D dashboard of analyzed Spring Boot classes.
-
-The Vite app is nested: all install, lint, build, and source work happens in `architecture-evaluator-frontend/`.
-
-Sibling repos:
-
-- Parent (git submodules + Docker Compose): https://github.com/Opsord/architecture-evaluator
-- Backend: https://github.com/Opsord/architecture-evaluator-backend
+This directory is the **frontend** of Architecture Evaluator in the monorepo: a React SPA with a 3D dashboard of analyzed Spring Boot classes.
 
 ## Setup and commands
 
-Run from `architecture-evaluator-frontend/`:
+Run from `frontend/`:
 
 ```bash
 pnpm install
