@@ -42,5 +42,6 @@ jobs:
           args: >
             -Dsonar.organization=opsord
             -Dsonar.projectKey=opsord_architecture-evaluator-frontend
+            "-Dsonar.projectName=Architecture Evaluator - Frontend"
             -Dsonar.sources=src
             -Dsonar.exclusions=**/MockData/**,**/*.d.ts
