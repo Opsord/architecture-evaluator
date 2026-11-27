@@ -1,0 +1,103 @@
+name: Docker Build & Smoke Test
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'docker-compose.yml'
+      - 'backend/Dockerfile'
+      - 'backend/pom.xml'
+      - 'frontend/Dockerfile'
+      - 'frontend/package.json'
+      - 'frontend/pnpm-lock.yaml'
+      - '.github/workflows/docker.yml'
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'docker-compose.yml'
+      - 'backend/Dockerfile'
+      - 'backend/pom.xml'
+      - 'frontend/Dockerfile'
+      - 'frontend/package.json'
+      - 'frontend/pnpm-lock.yaml'
+      - '.github/workflows/docker.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: docker-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  docker-smoke-test:
+    name: Build images and run E2E smoke test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Docker Compose stack
+        run: docker compose build
+
+      - name: Start Docker Compose stack
+        run: docker compose up -d
+
+      - name: Wait for backend health endpoint
+        run: |
+          for i in $(seq 1 30); do
+            if curl -fsS http://localhost:8080/actuator/health | grep -q '"status":"UP"'; then
+              echo "Backend is UP"
+              exit 0
+            fi
+            echo "Waiting for backend... ($i/30)"
+            sleep 2
+          done
+          echo "Backend did not become healthy in time"
+          exit 1
+
+      - name: Smoke test frontend SPA and Nginx API proxy
+        run: |
+          set -euo pipefail
+
+          # 1. Verify frontend SPA is served by Nginx on port 80
+          curl -fsS http://localhost/ | grep -qi "<html"
+          echo "Frontend SPA OK"
+
+          # 2. Build a minimal Spring Boot project ZIP and analyze it through Nginx /api/ proxy
+          TMP_DIR=$(mktemp -d)
+          mkdir -p "$TMP_DIR/demo/src/main/java/com/example/demo"
+          cat > "$TMP_DIR/demo/pom.xml" <<'EOF'
+          <project>
+            <groupId>com.example</groupId>
+            <artifactId>demo</artifactId>
+            <version>1.0.0</version>
+            <properties>
+              <java.version>21</java.version>
+            </properties>
+          </project>
+          EOF
+          cat > "$TMP_DIR/demo/src/main/java/com/example/demo/HelloService.java" <<'EOF'
+          package com.example.demo;
+          import org.springframework.stereotype.Service;
+
+          @Service
+          public class HelloService {
+              private String greeting = "hi";
+              public String sayHello() { return greeting; }
+          }
+          EOF
+          (cd "$TMP_DIR" && zip -qr smoke-project.zip demo)
+
+          RESPONSE=$(curl -fsS -X POST -F "project=@$TMP_DIR/smoke-project.zip" http://localhost/api/orchestrator/analyze-upload)
+          echo "$RESPONSE" | grep -q '"qualifiedName":"com.example.demo.HelloService"'
+          echo "End-to-end /api/orchestrator/analyze-upload through Nginx OK"
+
+          rm -rf "$TMP_DIR"
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down Docker Compose stack
+        if: always()
+        run: docker compose down -v
