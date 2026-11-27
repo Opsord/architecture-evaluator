@@ -2,7 +2,7 @@ package io.github.opsord.architecture_evaluator_backend.modules.api.project_scan
 
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.file_instance.FileInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.services.file_instance.FileInstanceService;
-import lombok.RequiredArgsConstructor;
+import jakarta.annotation.PreDestroy;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -12,14 +12,34 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicInteger;
 
 @Service
-@RequiredArgsConstructor
 public class SrcScannerService {
 
     private static final Logger logger = LoggerFactory.getLogger(SrcScannerService.class);
     private final FileInstanceService fileInstanceService;
+    private final ExecutorService parserExecutor;
+
+    public SrcScannerService(FileInstanceService fileInstanceService) {
+        this.fileInstanceService = fileInstanceService;
+        int poolSize = Math.max(2, Runtime.getRuntime().availableProcessors());
+        AtomicInteger threadCounter = new AtomicInteger(1);
+        this.parserExecutor = Executors.newFixedThreadPool(poolSize, runnable -> {
+            Thread thread = new Thread(runnable, "java-parser-worker-" + threadCounter.getAndIncrement());
+            thread.setDaemon(true);
+            return thread;
+        });
+    }
+
+    @PreDestroy
+    public void shutdown() {
+        parserExecutor.shutdownNow();
+    }
 
     /**
      * Scans the `src` folder for all `.java` files.
@@ -55,19 +75,43 @@ public class SrcScannerService {
     }
 
     /**
-     * Parses Java files into FileInstance objects.
+     * Parses Java files into FileInstance objects using a bounded daemon executor.
      */
     public List<FileInstance> parseJavaFiles(List<File> javaFiles, File projectRoot) {
-        return javaFiles.parallelStream()
-                .map(javaFile -> {
-                    try {
-                        return fileInstanceService.parseJavaFile(javaFile, projectRoot);
-                    } catch (Exception e) {
-                        logger.error("Failed to parse file: {}", javaFile.getAbsolutePath(), e);
-                        return null;
-                    }
-                })
-                .filter(Objects::nonNull)
-                .toList();
+        if (javaFiles == null || javaFiles.isEmpty()) {
+            return List.of();
+        }
+
+        List<Future<FileInstance>> futures = new ArrayList<>(javaFiles.size());
+        for (File javaFile : javaFiles) {
+            futures.add(parserExecutor.submit(() -> {
+                try {
+                    return fileInstanceService.parseJavaFile(javaFile, projectRoot);
+                } catch (Exception e) {
+                    logger.error("Failed to parse file: {}", javaFile.getAbsolutePath(), e);
+                    return null;
+                }
+            }));
+        }
+
+        List<FileInstance> results = new ArrayList<>(javaFiles.size());
+        for (Future<FileInstance> future : futures) {
+            try {
+                FileInstance instance = future.get();
+                if (instance != null) {
+                    results.add(instance);
+                }
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                for (Future<FileInstance> remaining : futures) {
+                    remaining.cancel(true);
+                }
+                logger.warn("Java file parsing interrupted", e);
+                break;
+            } catch (ExecutionException e) {
+                logger.error("Unexpected execution error while parsing Java file", e.getCause());
+            }
+        }
+        return results;
     }
 }

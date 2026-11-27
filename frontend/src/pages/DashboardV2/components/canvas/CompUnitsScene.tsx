@@ -1,4 +1,4 @@
-import React, { useCallback, useMemo } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import LayerBox from "./elements/LayerBox.tsx";
 import CompUnitRow from "./agrupators/CompUnitRow.tsx";
@@ -202,16 +202,54 @@ const CompUnitsScene: React.FC<CompUnitsSceneProps> = ({
         ? cubes.find((c) => c.id === selectedCube)?.data ?? null
         : null;
 
+    const selectedCubeRef = useRef<string | null>(selectedCube);
+    selectedCubeRef.current = selectedCube;
+
+    const [canvasEl, setCanvasEl] = useState<HTMLCanvasElement | null>(null);
+    const [contextLost, setContextLost] = useState(false);
+    const [isPageVisible, setIsPageVisible] = useState(
+        typeof document === "undefined" ? true : document.visibilityState === "visible",
+    );
+
+    useEffect(() => {
+        const handleVisibilityChange = () => {
+            setIsPageVisible(document.visibilityState === "visible");
+        };
+        document.addEventListener("visibilitychange", handleVisibilityChange);
+        return () => {
+            document.removeEventListener("visibilitychange", handleVisibilityChange);
+        };
+    }, []);
+
+    useEffect(() => {
+        if (!canvasEl) {
+            return;
+        }
+        const handleContextLost = (event: Event) => {
+            event.preventDefault();
+            setContextLost(true);
+        };
+        const handleContextRestored = () => {
+            setContextLost(false);
+        };
+        canvasEl.addEventListener("webglcontextlost", handleContextLost);
+        canvasEl.addEventListener("webglcontextrestored", handleContextRestored);
+        return () => {
+            canvasEl.removeEventListener("webglcontextlost", handleContextLost);
+            canvasEl.removeEventListener("webglcontextrestored", handleContextRestored);
+        };
+    }, [canvasEl]);
+
     const onSelectCube = useCallback(
         (id: string) => {
-            if (id === selectedCube) {
+            if (id === selectedCubeRef.current) {
                 setSelectedCube(null, null);
                 return;
             }
             const unit = cubes.find((c) => c.id === id)?.data ?? null;
             setSelectedCube(id, unit);
         },
-        [cubes, selectedCube, setSelectedCube],
+        [cubes, setSelectedCube],
     );
 
     const layerLabels = useMemo(() => boxes.map((box) => box.label), [boxes]);
@@ -221,8 +259,9 @@ const CompUnitsScene: React.FC<CompUnitsSceneProps> = ({
             <Canvas
                 className="w-full h-full"
                 dpr={[1, 1.5]}
-                frameloop={vibrationEnabled ? "always" : "demand"}
+                frameloop={vibrationEnabled && isPageVisible && !contextLost ? "always" : "demand"}
                 camera={{ position: [0, 0, 20], fov: 60 }}
+                onCreated={({ gl }) => setCanvasEl(gl.domElement)}
             >
                 <ambientLight intensity={0.5} />
                 <directionalLight position={[5, 10, 7]} intensity={1} />
@@ -256,6 +295,26 @@ const CompUnitsScene: React.FC<CompUnitsSceneProps> = ({
 
                 <CameraControls />
             </Canvas>
+            {contextLost && (
+                <div
+                    role="alert"
+                    className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-white/90 p-6 text-center"
+                >
+                    <p className="text-base font-semibold text-gray-800 mb-2">
+                        WebGL rendering context was lost.
+                    </p>
+                    <p className="text-sm text-gray-600 mb-4">
+                        Waiting for the browser to restore the graphics context, or reload the page.
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => window.location.reload()}
+                        className="px-4 py-2 rounded-lg bg-swamp-600 text-white text-sm font-medium hover:bg-swamp-700 transition-colors"
+                    >
+                        Reload page
+                    </button>
+                </div>
+            )}
             <LayerLabelsOverlay labels={layerLabels} />
         </div>
     );

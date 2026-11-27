@@ -5,6 +5,7 @@ import OptionSelector from './components/OptionSelector'
 
 function ProjectLoad() {
     const [activeTab, setActiveTab] = useState<'zip' | 'github'>('zip')
+    const [isAnalyzing, setIsAnalyzing] = useState(false)
 
     return (
         <div className="flex flex-col items-center min-h-[80vh] py-12 px-4">
@@ -21,13 +22,21 @@ function ProjectLoad() {
                 {/* Selector (left section) */}
                 <div className="flex items-center justify-center">
                     <div className="w-full h-full max-w-md bg-gradient-to-br from-white/70 to-gray-100/70 backdrop-blur-lg border border-gray-border rounded-2xl shadow-xl p-8 flex flex-col justify-center">
-                        <OptionSelector value={activeTab} onChange={setActiveTab} />
+                        <OptionSelector
+                            value={activeTab}
+                            onChange={setActiveTab}
+                            disabled={isAnalyzing}
+                        />
                     </div>
                 </div>
                 {/* Form (right section) */}
                 <div className="flex items-center justify-center">
                     <div className="w-full h-full max-w-md bg-gradient-to-br from-white/80 to-bright-turquoise-50/80 backdrop-blur-lg border border-gray-border rounded-2xl shadow-xl p-8 flex flex-col justify-center">
-                        {activeTab === 'zip' ? <UploadForm /> : <GitHubForm />}
+                        {activeTab === 'zip' ? (
+                            <UploadForm onLoadingChange={setIsAnalyzing} />
+                        ) : (
+                            <GitHubForm onLoadingChange={setIsAnalyzing} />
+                        )}
                     </div>
                 </div>
             </div>

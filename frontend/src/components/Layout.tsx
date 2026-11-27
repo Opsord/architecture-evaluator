@@ -1,14 +1,9 @@
-import type { ReactNode } from 'react'
 import { NavigationProvider } from '../context/NavigationContext'
 import Navbar from './Navbar'
 import MainContent from './MainContent'
 import Footer from './Footer'
 
-type LayoutProps = {
-    children?: ReactNode
-}
-
-export default function Layout({ }: LayoutProps) {
+export default function Layout() {
     return (
         <NavigationProvider>
             <div className="min-h-screen flex flex-col bg-gradient-to-br from-background-light via-bright-turquoise-50 to-background-dark">

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
 import { Html } from "@react-three/drei";
-import { BoxGeometry, Mesh } from "three";
+import { BoxGeometry, Group } from "three";
 import { useFrame } from "@react-three/fiber";
 import type { ProcessedClassInstance } from "../../../../../types/ProcessedClassInstance.ts";
 
@@ -12,7 +12,8 @@ const OPACITY_DIMMED = 0.25;
 const DEFORMATION_FACTOR = 0.4;
 const VIBRATION_FACTOR = 0.1;
 
-const plainGeometryCache = new Map<string, BoxGeometry>();
+const UNIT_BOX_GEOMETRY = new BoxGeometry(1, 1, 1);
+const UNIT_SCALE: [number, number, number] = [1, 1, 1];
 
 function hashLabel(label: string): number {
     let hash = 0;
@@ -25,20 +26,6 @@ function hashLabel(label: string): number {
 function seededUnit(seed: number): number {
     const x = Math.sin(seed) * 10000;
     return x - Math.floor(x);
-}
-
-function sizeKey(size: [number, number, number]): string {
-    return `${size[0]},${size[1]},${size[2]}`;
-}
-
-function getPlainBoxGeometry(size: [number, number, number]): BoxGeometry {
-    const key = sizeKey(size);
-    let geometry = plainGeometryCache.get(key);
-    if (!geometry) {
-        geometry = new BoxGeometry(...size);
-        plainGeometryCache.set(key, geometry);
-    }
-    return geometry;
 }
 
 function getDeformedBoxGeometry(
@@ -107,23 +94,23 @@ const CubeElement: React.FC<CubeProps> = ({
     const cc = unit?.classAnalysisInstance?.complexityMetrics?.maxMethodMcCabeCC ?? 1;
     const instability = unit?.classAnalysisInstance?.couplingMetrics?.instability ?? 0;
 
-    const meshRef = useRef<Mesh>(null);
+    const groupRef = useRef<Group>(null);
     const shouldVibrate = vibrationEnabled && Math.min(instability, 0.99) > 0.1;
     const phase = useMemo(() => hashLabel(id) * 0.001, [id]);
 
     useEffect(() => {
-        if (!shouldVibrate && meshRef.current) {
-            meshRef.current.position.set(position[0], position[1], position[2]);
+        if (!shouldVibrate && groupRef.current) {
+            groupRef.current.position.set(position[0], position[1], position[2]);
         }
     }, [shouldVibrate, position]);
 
     useFrame((state) => {
-        if (!meshRef.current || !shouldVibrate) {
+        if (!groupRef.current || !shouldVibrate) {
             return;
         }
         const amplitude = VIBRATION_FACTOR * Math.pow(Math.min(instability, 0.99), 2);
         const t = state.clock.elapsedTime + phase;
-        meshRef.current.position.set(
+        groupRef.current.position.set(
             position[0] + Math.sin(t * 13) * amplitude,
             position[1] + Math.sin(t * 17) * amplitude,
             position[2] + Math.sin(t * 19) * amplitude,
@@ -132,19 +119,19 @@ const CubeElement: React.FC<CubeProps> = ({
 
     const geometry = useMemo(() => {
         if (lcom <= 0) {
-            return getPlainBoxGeometry(size);
+            return UNIT_BOX_GEOMETRY;
         }
         return getDeformedBoxGeometry(size, lcom, hashLabel(id));
     }, [size, lcom, id]);
 
     useEffect(() => {
-        if (lcom <= 0) {
+        if (geometry === UNIT_BOX_GEOMETRY) {
             return;
         }
         return () => {
             geometry.dispose();
         };
-    }, [geometry, lcom]);
+    }, [geometry]);
 
     let color = getCCColor(cc);
     if (isSelected) color = COLOR_SELECTED;
@@ -153,27 +140,28 @@ const CubeElement: React.FC<CubeProps> = ({
     else if (dimmed) color = COLOR_DIMMED;
 
     return (
-        <mesh
-            ref={meshRef}
-            position={position}
-            geometry={geometry}
-            onPointerOver={(event) => {
-                event.stopPropagation();
-                setHovered(true);
-            }}
-            onPointerOut={() => setHovered(false)}
-            onClick={(event) => {
-                event.stopPropagation();
-                onSelect?.(id);
-            }}
-        >
-            <meshStandardMaterial
-                color={color}
-                transparent={!!dimmed}
-                opacity={dimmed ? OPACITY_DIMMED : 1}
-            />
+        <group ref={groupRef} position={position}>
+            <mesh
+                geometry={geometry}
+                scale={lcom <= 0 ? size : UNIT_SCALE}
+                onPointerOver={(event) => {
+                    event.stopPropagation();
+                    setHovered(true);
+                }}
+                onPointerOut={() => setHovered(false)}
+                onClick={(event) => {
+                    event.stopPropagation();
+                    onSelect?.(id);
+                }}
+            >
+                <meshStandardMaterial
+                    color={color}
+                    transparent={!!dimmed}
+                    opacity={dimmed ? OPACITY_DIMMED : 1}
+                />
+            </mesh>
             {(hovered || isSelected) && (
-                <Html position={[0, 1.2, 0]}>
+                <Html position={[0, size[1] / 2 + 0.7, 0]}>
                     <div style={{
                         background: "white",
                         color: "#17474a",
@@ -186,7 +174,7 @@ const CubeElement: React.FC<CubeProps> = ({
                     </div>
                 </Html>
             )}
-        </mesh>
+        </group>
     );
 };
 

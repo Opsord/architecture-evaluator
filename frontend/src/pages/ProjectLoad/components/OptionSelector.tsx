@@ -4,25 +4,45 @@ import { FaFileArchive, FaGithub } from "react-icons/fa";
 interface OptionSelectorProps {
     value: 'zip' | 'github';
     onChange: (value: 'zip' | 'github') => void;
+    disabled?: boolean;
 }
 
-const OptionSelector: React.FC<OptionSelectorProps> = ({ value, onChange }) => {
+const OptionSelector: React.FC<OptionSelectorProps> = ({ value, onChange, disabled = false }) => {
     return (
-        <fieldset className="space-y-6">
+        <fieldset className="space-y-6" disabled={disabled}>
             <legend className="text-2xl font-bold mb-6 text-primary select-none text-center">Select an option</legend>
-            <label htmlFor="upload-zip" className={`flex items-center gap-4 px-5 py-5 rounded-xl cursor-pointer transition border-2 ${value === 'zip' ? 'border-primary bg-bright-turquoise-50/60 shadow-lg' : 'border-gray-200 bg-white/60 hover:bg-gray-100/80'}`}>
+            <label
+                htmlFor="upload-zip"
+                className={`flex items-center gap-4 px-5 py-5 rounded-xl transition border-2 ${
+                    disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                } ${
+                    value === 'zip'
+                        ? 'border-primary bg-bright-turquoise-50/60 shadow-lg'
+                        : 'border-gray-200 bg-white/60 hover:bg-gray-100/80'
+                }`}
+            >
                 <FaFileArchive className="text-3xl text-primary" />
-                <span className="flex-1 text-lg font-medium">Upload project ZIP</span>
+                <span className="flex-1 text-lg font-medium">Upload project archive</span>
                 <input
                     type="radio"
                     name="projectSource"
                     className="accent-primary w-5 h-5"
                     id="upload-zip"
                     checked={value === 'zip'}
+                    disabled={disabled}
                     onChange={() => onChange('zip')}
                 />
             </label>
-            <label htmlFor="github-link" className={`flex items-center gap-4 px-5 py-5 rounded-xl cursor-pointer transition border-2 ${value === 'github' ? 'border-primary bg-bright-turquoise-50/60 shadow-lg' : 'border-gray-200 bg-white/60 hover:bg-gray-100/80'}`}>
+            <label
+                htmlFor="github-link"
+                className={`flex items-center gap-4 px-5 py-5 rounded-xl transition border-2 ${
+                    disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
+                } ${
+                    value === 'github'
+                        ? 'border-primary bg-bright-turquoise-50/60 shadow-lg'
+                        : 'border-gray-200 bg-white/60 hover:bg-gray-100/80'
+                }`}
+            >
                 <FaGithub className="text-3xl text-primary" />
                 <span className="flex-1 text-lg font-medium">Get from GitHub</span>
                 <input
@@ -31,6 +51,7 @@ const OptionSelector: React.FC<OptionSelectorProps> = ({ value, onChange }) => {
                     className="accent-primary w-5 h-5"
                     id="github-link"
                     checked={value === 'github'}
+                    disabled={disabled}
                     onChange={() => onChange('github')}
                 />
             </label>

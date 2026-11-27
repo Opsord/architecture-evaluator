@@ -1,9 +1,5 @@
 import React from "react";
 
-type DashboardLegendProps = {
-    onClose?: () => void;
-};
-
 const lineLegend = [
     {
         label: "Outgoing",
@@ -17,23 +13,11 @@ const lineLegend = [
     }
 ];
 
-// @ts-ignore
-const DashboardLegend: React.FC<DashboardLegendProps> = ({ onClose }) => (
+const DashboardLegend: React.FC = () => (
     <div
         className="relative flex flex-col p-2 w-full h-full bg-gradient-to-br from-bright-turquoise-50 to-white rounded-xl shadow-inner border border-gray-200 overflow-y-auto"
         style={{ fontSize: "0.75rem" }}
     >
-        {onClose && (
-            <button
-                onClick={onClose}
-                className="absolute top-1 right-2 text-gray-400 hover:text-gray-700 text-lg font-bold focus:outline-none"
-                aria-label="Close legend"
-                type="button"
-            >
-                ×
-            </button>
-        )}
-
         {/* Header */}
         <div className="font-bold text-xl text-primary mb-3 text-center tracking-wide">Legend</div>
 
@@ -45,22 +29,22 @@ const DashboardLegend: React.FC<DashboardLegendProps> = ({ onClose }) => (
                 <div className="flex flex-col items-center">
                     <div className="w-6 h-4 bg-green-400 rounded border border-green-500 mb-1"></div>
                     <span className="text-sm text-gray-700 font-medium">Low</span>
-                    <span className="text-xs text-gray-500">(1-10)</span>
+                    <span className="text-xs text-gray-500">(1–10)</span>
                 </div>
                 <div className="flex flex-col items-center">
                     <div className="w-6 h-4 bg-yellow-400 rounded border border-yellow-500 mb-1"></div>
                     <span className="text-sm text-gray-700 font-medium">Medium</span>
-                    <span className="text-xs text-gray-500">(10-20)</span>
+                    <span className="text-xs text-gray-500">(11–20)</span>
                 </div>
                 <div className="flex flex-col items-center">
                     <div className="w-6 h-4 bg-orange-400 rounded border border-orange-500 mb-1"></div>
                     <span className="text-sm text-gray-700 font-medium">High</span>
-                    <span className="text-xs text-gray-500">(20-40)</span>
+                    <span className="text-xs text-gray-500">(21–40)</span>
                 </div>
                 <div className="flex flex-col items-center">
                     <div className="w-6 h-4 bg-red-500 rounded border border-red-600 mb-1"></div>
                     <span className="text-sm text-gray-700 font-medium">Very High</span>
-                    <span className="text-xs text-gray-500">(40+)</span>
+                    <span className="text-xs text-gray-500">(41+)</span>
                 </div>
             </div>
         </div>

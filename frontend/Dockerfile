@@ -28,6 +28,7 @@ RUN echo 'server { \
     server_name localhost; \
     root /usr/share/nginx/html; \
     index index.html; \
+    client_max_body_size 150m; \
     \
     # Proxy API requests to backend \
     location /api/ { \
@@ -37,8 +38,8 @@ RUN echo 'server { \
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for; \
         proxy_set_header X-Forwarded-Proto $scheme; \
         proxy_connect_timeout 60s; \
-        proxy_send_timeout 60s; \
-        proxy_read_timeout 60s; \
+        proxy_send_timeout 180s; \
+        proxy_read_timeout 180s; \
     } \
     \
     # Handle client-side routing \
@@ -69,7 +70,7 @@ EXPOSE 80
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost/ || exit 1
+    CMD wget -q --spider http://127.0.0.1/ || exit 1
 
 # Start nginx
 CMD ["nginx", "-g", "daemon off;"]

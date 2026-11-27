@@ -13,6 +13,10 @@ on:
       - 'backend/**'
       - '.github/workflows/backend.yml'
 
+concurrency:
+  group: backend-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     name: Build, test, and analyze backend
@@ -21,11 +25,11 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Set up JDK 17
-        uses: actions/setup-java@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v5
         with:
-          java-version: 17
-          distribution: 'zulu'
+          java-version: 21
+          distribution: 'temurin'
       - name: Cache SonarQube packages
         uses: actions/cache@v4
         with:
@@ -47,4 +51,4 @@ jobs:
           -Pcoverage
           -Dsonar.organization=opsord
           -Dsonar.projectKey=opsord_architecture-evaluator-backend
-          -Dsonar.projectName=Architecture-Evaluator-Backend
+          -Dsonar.projectName=Architecture_Evaluator-Backend

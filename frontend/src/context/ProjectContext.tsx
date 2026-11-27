@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
 import type { ProjectAnalysisDTO } from "../types/ProjectAnalysisInstance.ts";
 
 interface ProjectContextType {
@@ -27,12 +27,14 @@ export const ProjectProvider: React.FC<{ children: React.ReactNode }> = ({ child
         };
     }, []);
 
-    const setProjectData = (data: ProjectAnalysisDTO) => {
+    const setProjectData = useCallback((data: ProjectAnalysisDTO) => {
         setProjectDataState(data);
-    };
+    }, []);
+
+    const value = useMemo(() => ({ projectData, setProjectData }), [projectData, setProjectData]);
 
     return (
-        <ProjectContext.Provider value={{ projectData, setProjectData }}>
+        <ProjectContext.Provider value={value}>
             {children}
         </ProjectContext.Provider>
     );

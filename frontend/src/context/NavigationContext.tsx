@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 
 export type PageType = 'home' | 'instructions' | 'load' | 'dashboard';
@@ -12,9 +12,10 @@ const NavigationContext = createContext<NavigationContextType | undefined>(undef
 
 export const NavigationProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [currentPage, setCurrentPage] = useState<PageType>('home');
+  const value = useMemo(() => ({ currentPage, setCurrentPage }), [currentPage]);
 
   return (
-    <NavigationContext.Provider value={{ currentPage, setCurrentPage }}>
+    <NavigationContext.Provider value={value}>
       {children}
     </NavigationContext.Provider>
   );

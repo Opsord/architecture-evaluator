@@ -26,19 +26,13 @@
 		<url/>
 	</scm>
 	<properties>
-		<java.version>17</java.version>
+		<java.version>21</java.version>
+		<argLine></argLine>
 		<sonar.organization>opsord</sonar.organization>
 		<sonar.host.url>https://sonarcloud.io</sonar.host.url>
-		<jacoco.agent.argLine>-javaagent:${settings.localRepository}/org/jacoco/org.jacoco.agent/0.8.13/org.jacoco.agent-0.8.13-runtime.jar=destfile=target/jacoco.exec</jacoco.agent.argLine>
 	</properties>
 	<dependencies>
 		<!-- Spring Boot Dependencies -->
-		<!-- Spring Boot Starter Data JPA: Provides support for JPA-based data access -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-jpa</artifactId>
-		</dependency>
-
 		<!-- Spring Boot Starter Web: Provides support for building web applications, including RESTful services -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -54,14 +48,17 @@
 		</dependency>
 
 		<!-- Spring Boot Starter Test: Provides support for testing Spring Boot applications -->
-		<!-- https://mvnrepository.com/artifact/org.springframework.boot/spring-boot-starter-test -->
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-test</artifactId>
-			<version>3.5.3</version>
 			<scope>test</scope>
 		</dependency>
 
+		<!-- Spring Boot Starter Actuator: Health checks and operational endpoints -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
 
 		<!-- Utility Dependencies -->
 		<!-- Java Parser: Library for parsing, analyzing, and processing Java source code -->
@@ -86,41 +83,11 @@
 			<version>2.0.17</version>
 		</dependency>
 
-		<!-- Springfox: Library for generating API documentation for Spring Boot applications -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-actuator</artifactId>
-		</dependency>
-
 		<!-- Apache Commons Compress: Library for working with compressed files -->
 		<dependency>
 			<groupId>org.apache.commons</groupId>
 			<artifactId>commons-compress</artifactId>
 			<version>1.27.1</version>
-		</dependency>
-
-		<!-- JacoCo Maven Plugin: Used for code coverage analysis -->
-		<!-- https://mvnrepository.com/artifact/org.jacoco/jacoco-maven-plugin -->
-		<dependency>
-			<groupId>org.jacoco</groupId>
-			<artifactId>jacoco-maven-plugin</artifactId>
-			<version>0.8.13</version>
-		</dependency>
-
-		<!-- Mockito: Library for creating mock objects in tests -->
-		<!-- https://mvnrepository.com/artifact/org.mockito/mockito-junit-jupiter -->
-		<dependency>
-			<groupId>org.mockito</groupId>
-			<artifactId>mockito-junit-jupiter</artifactId>
-			<version>5.18.0</version>
-			<scope>test</scope>
-		</dependency>
-		<!-- https://mvnrepository.com/artifact/org.mockito/mockito-core -->
-		<dependency>
-			<groupId>org.mockito</groupId>
-			<artifactId>mockito-core</artifactId>
-			<version>5.18.0</version>
-			<scope>test</scope>
 		</dependency>
 	</dependencies>
 
@@ -155,6 +122,9 @@
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
 				<artifactId>maven-surefire-plugin</artifactId>
+				<configuration>
+					<argLine>@{argLine} -XX:+EnableDynamicAgentLoading</argLine>
+				</configuration>
 			</plugin>
 		</plugins>
 	</build>
@@ -164,15 +134,6 @@
 			<id>coverage</id>
 			<build>
 				<plugins>
-					<plugin>
-						<groupId>org.apache.maven.plugins</groupId>
-						<artifactId>maven-surefire-plugin</artifactId>
-						<configuration>
-							<argLine>
-								${jacoco.agent.argLine} -javaagent:${settings.localRepository}/org/mockito/mockito-core/5.18.0/mockito-core-5.18.0.jar
-							</argLine>
-						</configuration>
-					</plugin>
 					<plugin>
 						<groupId>org.jacoco</groupId>
 						<artifactId>jacoco-maven-plugin</artifactId>

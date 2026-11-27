@@ -23,7 +23,7 @@ Dev proxy: `/api/orchestrator` → `http://localhost:8080`. The backend must be 
 - Routing is **in-memory**, not React Router: `NavigationContext` (`home` \| `instructions` \| `load` \| `dashboard`).
 - Analysis result lives in `ProjectContext` (`ProjectAnalysisDTO`). Refreshing the browser drops it (not persisted).
 - `src/services/api.ts` — axios, 180s timeout, `AbortSignal` on upload/GitHub calls.
-- Pages: `Home`, `Instructions`, `ProjectLoad` (zip or GitHub URL), lazy `DashboardV2`.
+- Pages: `Home`, `Instructions`, `ProjectLoad` (`.zip`/`.tar` archive or GitHub URL), lazy `DashboardV2`.
 - 3D scene: `@react-three/fiber` + `drei` + `three`. `DashboardV2` is `React.lazy`; Vite `manualChunks` isolates Three.js.
 - Types under `src/types/` should stay aligned with backend DTOs (`ProjectAnalysisInstance` / `ProcessedClassInstance`).
 
@@ -31,14 +31,14 @@ In **DEV only**, `ProjectContext` dynamically imports `src/services/MockData/res
 
 ## Conventions
 
-- Tailwind CSS v4 via `@tailwindcss/vite`. Use existing UI bits in `src/components/ui/`.
+- Tailwind CSS v4 via `@tailwindcss/vite`.
 - Prefer extending current canvas components over new 3D libraries.
 - `useFrame`: no `Math.random` and no `setState` per frame. Cube vibration uses a sine offset. Keep vibration **on by default**.
 - Draw dependency lines only when a cube is selected (`DependencyLinesLayer`). Related-class colors are selection, not hover.
 - Do not lift cube hover to `CompUnitsScene`. Line hover stays inside `DependencyLinesLayer`.
 - Cube materials are opaque unless dimmed. Layer boxes must not steal raycasts. Layer names are a CSS overlay, not `Html` in the canvas.
-- `Canvas frameloop` is `"always"` while vibration is on and `"demand"` when it is off.
-- Axios calls from `UploadForm` / `GitHubForm` must honor abort on unmount; `finally` should clear loading only if the in-flight controller is still the current one.
+- `Canvas frameloop` is `"always"` while vibration is on and the tab is visible, and `"demand"` when vibration is off or the tab is hidden.
+- Axios calls from `UploadForm` / `GitHubForm` share `useProjectAnalysis` (abort on unmount, `finally` clears loading only if the in-flight controller is still current, inline `role="alert"` error banner from RFC 7807 `ProblemDetail`).
 - Keep unused dependencies out of `package.json` (no router/charts unless the UI actually uses them).
 - Install and run with **pnpm**. After dependency changes, commit `pnpm-lock.yaml`. If a native package needs a postinstall (SWC, esbuild, Tailwind oxide), add it to `pnpm.onlyBuiltDependencies`.
 - Keep `@types/three` as a direct devDependency. pnpm does not hoist Three.js types the way npm did, and `tsc -b` fails without them.
@@ -48,8 +48,7 @@ In **DEV only**, `ProjectContext` dynamically imports `src/services/MockData/res
 - **Wrong working directory:** `package.json` is one level down, not at the git root.
 - Dev URL is **5173**, not 3000. Docker frontend listens on port **80** and proxies `/api/` to `backend:8080`.
 - `REACT_APP_API_URL` in Compose is unused (this is Vite, not CRA). The browser calls same-origin `/api/orchestrator`.
-- GitHub analysis depends on the backend downloading the **`main`** branch zip.
-- This repo is a **submodule** at `frontend/` in the parent. After merging here, bump the parent submodule pointer on a separate parent PR.
+- GitHub analysis tries the backend's `main` branch first and falls back to `master` on HTTP 404.
 
 ## Boundaries
 

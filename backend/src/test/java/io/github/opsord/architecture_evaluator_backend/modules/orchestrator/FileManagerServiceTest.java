@@ -1,7 +1,11 @@
 package io.github.opsord.architecture_evaluator_backend.modules.orchestrator;
 
+import io.github.opsord.architecture_evaluator_backend.modules.api.orchestrator.exceptions.ArchiveExtractionException;
+import io.github.opsord.architecture_evaluator_backend.modules.api.orchestrator.exceptions.ArchiveLimitExceededException;
 import io.github.opsord.architecture_evaluator_backend.modules.api.orchestrator.services.FileManagerService;
 import org.apache.commons.compress.archivers.ArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveEntry;
+import org.apache.commons.compress.archivers.tar.TarArchiveOutputStream;
 import org.apache.commons.compress.archivers.zip.ZipArchiveEntry;
 import org.apache.commons.compress.archivers.zip.ZipArchiveOutputStream;
 import org.junit.jupiter.api.*;
@@ -39,6 +43,8 @@ class FileManagerServiceTest {
         method.setAccessible(true);
         assertFalse((Boolean) method.invoke(fileManagerService, "https://gitlab.com/user/repo"));
         assertFalse((Boolean) method.invoke(fileManagerService, "https://github.com/user"));
+        assertFalse((Boolean) method.invoke(fileManagerService, "https://github.com/user/.."));
+        assertFalse((Boolean) method.invoke(fileManagerService, "https://github.com/user/."));
         assertFalse((Boolean) method.invoke(fileManagerService, ""));
         assertFalse((Boolean) method.invoke(fileManagerService, (Object) null));
     }
@@ -99,15 +105,34 @@ class FileManagerServiceTest {
     @Test
     void testSaveUploadedFile_invalidExtension() {
         MultipartFile multipartFile = mock(MultipartFile.class);
+        when(multipartFile.isEmpty()).thenReturn(false);
         when(multipartFile.getOriginalFilename()).thenReturn("test.txt");
-        assertThrows(IOException.class, () -> fileManagerService.saveUploadedFile(multipartFile));
+        assertThrows(IllegalArgumentException.class, () -> fileManagerService.saveUploadedFile(multipartFile));
+    }
+
+    @Test
+    void testSaveUploadedFile_unsupportedArchiveExtensions() {
+        for (String name : new String[]{"archive.rar", "archive.7z", "archive.gz"}) {
+            MultipartFile multipartFile = mock(MultipartFile.class);
+            when(multipartFile.isEmpty()).thenReturn(false);
+            when(multipartFile.getOriginalFilename()).thenReturn(name);
+            assertThrows(IllegalArgumentException.class, () -> fileManagerService.saveUploadedFile(multipartFile));
+        }
     }
 
     @Test
     void testSaveUploadedFile_noExtension() {
         MultipartFile multipartFile = mock(MultipartFile.class);
+        when(multipartFile.isEmpty()).thenReturn(false);
         when(multipartFile.getOriginalFilename()).thenReturn("testfile");
-        assertThrows(IOException.class, () -> fileManagerService.saveUploadedFile(multipartFile));
+        assertThrows(IllegalArgumentException.class, () -> fileManagerService.saveUploadedFile(multipartFile));
+    }
+
+    @Test
+    void testSaveUploadedFile_emptyFile() {
+        MultipartFile multipartFile = mock(MultipartFile.class);
+        when(multipartFile.isEmpty()).thenReturn(true);
+        assertThrows(IllegalArgumentException.class, () -> fileManagerService.saveUploadedFile(multipartFile));
     }
 
     @Test
@@ -142,16 +167,14 @@ class FileManagerServiceTest {
     }
 
     @Test
-    void testExtractArchive_invalidFile() {
-        File notArchive = new File("not_an_archive.txt");
+    void testExtractArchive_invalidFile() throws Exception {
+        File tempDir = Files.createTempDirectory("invalidarchive").toFile();
+        File notArchive = new File(tempDir, "not_an_archive.txt");
         try {
-            notArchive.createNewFile();
-            assertThrows(IOException.class, () -> fileManagerService.extractArchive(notArchive));
-        } catch (IOException ignored) {
-            // Ignore if file creation fails, as we are testing for exception handling
-            fail("Failed to create test file: " + notArchive.getAbsolutePath());
+            assertTrue(notArchive.createNewFile());
+            assertThrows(ArchiveExtractionException.class, () -> fileManagerService.extractArchive(notArchive));
         } finally {
-            notArchive.delete();
+            fileManagerService.deleteRecursively(tempDir);
         }
     }
 
@@ -213,7 +236,7 @@ class FileManagerServiceTest {
             zos.write("bad".getBytes());
             zos.closeArchiveEntry();
         }
-        assertThrows(IOException.class, () -> fileManagerService.extractArchive(zipFile));
+        assertThrows(ArchiveExtractionException.class, () -> fileManagerService.extractArchive(zipFile));
         fileManagerService.deleteRecursively(tempDir);
     }
 
@@ -227,7 +250,7 @@ class FileManagerServiceTest {
             zos.write("class Evil {}".getBytes());
             zos.closeArchiveEntry();
         }
-        assertThrows(IOException.class, () -> fileManagerService.extractArchive(zipFile));
+        assertThrows(ArchiveExtractionException.class, () -> fileManagerService.extractArchive(zipFile));
         fileManagerService.deleteRecursively(tempDir);
     }
 
@@ -254,9 +277,93 @@ class FileManagerServiceTest {
     @Test
     void testDeleteRecursively_nonExistentFile() {
         File file = new File("nonexistentfile.txt");
-        // No debe lanzar excepción
         fileManagerService.deleteRecursively(file);
         assertFalse(file.exists(), "File should not exist after deletion attempt");
+        assertDoesNotThrow(() -> fileManagerService.deleteRecursively(null));
+    }
+
+    @Test
+    void testExtractArchive_skipsTarSymlinks() throws Exception {
+        File tempDir = Files.createTempDirectory("tartest").toFile();
+        File tarFile = new File(tempDir, "test.tar");
+        try (TarArchiveOutputStream tos = new TarArchiveOutputStream(new FileOutputStream(tarFile))) {
+            TarArchiveEntry symlink = new TarArchiveEntry("src/main/java/Link.java", TarArchiveEntry.LF_SYMLINK);
+            symlink.setLinkName("/etc/passwd");
+            tos.putArchiveEntry(symlink);
+            tos.closeArchiveEntry();
+
+            byte[] content = "class Real {}".getBytes();
+            TarArchiveEntry regular = new TarArchiveEntry("src/main/java/Real.java");
+            regular.setSize(content.length);
+            tos.putArchiveEntry(regular);
+            tos.write(content);
+            tos.closeArchiveEntry();
+        }
+
+        File extracted = fileManagerService.extractArchive(tarFile);
+        assertFalse(new File(extracted, "src/main/java/Link.java").exists());
+        assertTrue(new File(extracted, "src/main/java/Real.java").exists());
+        fileManagerService.deleteRecursively(tempDir);
+    }
+
+    @Test
+    void testExtractArchive_exceedsEntryCountLimit() throws Exception {
+        File tempDir = Files.createTempDirectory("entrylimit").toFile();
+        File zipFile = new File(tempDir, "many.zip");
+        try (ZipArchiveOutputStream zos = new ZipArchiveOutputStream(zipFile)) {
+            for (int i = 0; i < 10_002; i++) {
+                ZipArchiveEntry entry = new ZipArchiveEntry("noise/file-" + i + ".txt");
+                zos.putArchiveEntry(entry);
+                zos.closeArchiveEntry();
+            }
+        }
+
+        assertThrows(ArchiveLimitExceededException.class, () -> fileManagerService.extractArchive(zipFile));
+        fileManagerService.deleteRecursively(tempDir);
+    }
+
+    @Test
+    void testExtractArchive_exceedsEntryBytesLimit() throws Exception {
+        File tempDir = Files.createTempDirectory("bytelimit").toFile();
+        File zipFile = new File(tempDir, "bomb.zip");
+        try (ZipArchiveOutputStream zos = new ZipArchiveOutputStream(zipFile)) {
+            ZipArchiveEntry entry = new ZipArchiveEntry("src/main/java/Huge.java");
+            zos.putArchiveEntry(entry);
+            byte[] chunk = new byte[1024 * 1024]; // 1 MB of zeros (highly compressible)
+            for (int i = 0; i < 21; i++) {
+                zos.write(chunk);
+            }
+            zos.closeArchiveEntry();
+        }
+
+        try {
+            assertThrows(ArchiveLimitExceededException.class, () -> fileManagerService.extractArchive(zipFile));
+        } finally {
+            fileManagerService.deleteRecursively(tempDir);
+        }
+    }
+
+    @Test
+    void testExtractArchive_allowsRootDirectoryEntry() throws Exception {
+        File tempDir = Files.createTempDirectory("rootdirzip").toFile();
+        File zipFile = new File(tempDir, "rootdir.zip");
+        try (ZipArchiveOutputStream zos = new ZipArchiveOutputStream(zipFile)) {
+            ZipArchiveEntry rootDir = new ZipArchiveEntry("./");
+            zos.putArchiveEntry(rootDir);
+            zos.closeArchiveEntry();
+
+            ZipArchiveEntry source = new ZipArchiveEntry("./src/main/java/App.java");
+            zos.putArchiveEntry(source);
+            zos.write("class App {}".getBytes());
+            zos.closeArchiveEntry();
+        }
+
+        try {
+            File extracted = fileManagerService.extractArchive(zipFile);
+            assertTrue(new File(extracted, "src/main/java/App.java").exists());
+        } finally {
+            fileManagerService.deleteRecursively(tempDir);
+        }
     }
 
     @Test

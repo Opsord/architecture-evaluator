@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import { useProjectContext } from "../../context/ProjectContext";
 import CompUnitsScene from "./components/canvas/CompUnitsScene.tsx";
 import ProcessedClassInfoCard from "./components/info/ProcessedClassInfoCard.tsx";
@@ -16,6 +16,14 @@ const DashboardV2: React.FC = () => {
         setSelectedCube(null);
         setSelectedUnit(null);
     }, [projectData]);
+
+    const handleSelectCube = useCallback(
+        (name: string | null, unit: ProcessedClassInstance | null) => {
+            setSelectedCube(name);
+            setSelectedUnit(unit);
+        },
+        [],
+    );
 
     if (!projectData) {
         return (
@@ -38,10 +46,7 @@ const DashboardV2: React.FC = () => {
                     <CompUnitsScene
                         projectData={projectData}
                         selectedCube={selectedCube}
-                        setSelectedCube={(name, unit) => {
-                            setSelectedCube(name);
-                            setSelectedUnit(unit);
-                        }}
+                        setSelectedCube={handleSelectCube}
                         vibrationEnabled={vibrationEnabled}
                     />
                 </div>

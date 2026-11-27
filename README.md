@@ -78,23 +78,32 @@ The system's quality will be evaluated based on functional and non-functional cr
 
 ### Prerequisites
 
-- **Java 17+**
-- **Spring Boot 3.x**
-- **Node.js** (for the graphical interface, if applicable)
-- **Docker** (optional, for easier deployment)
+- **Java 21 LTS** (for local backend development)
+- **Node.js 20+** and **pnpm 10+** (`corepack enable`, for local frontend development)
+- **Docker** & **Docker Compose** (recommended for running the full stack)
 
-### Installation
+### Quick Start with Docker Compose
 
-1. Clone the repository:
+```sh
+docker compose up --build
+```
+
+Open `http://localhost` in your browser. Nginx serves the frontend SPA on port `80` and proxies `/api/` requests to the internal `backend:8080` service (port `8080` is not published to the host).
+
+### Local Development (Monorepo)
+
+1. Run the backend (from `backend/`):
    ```sh
-   git clone https://github.com/user/repo.git
-   cd repo
+   cd backend
+   ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
    ```
-2. Build and run the backend:
+2. Run the frontend (from `frontend/`):
    ```sh
-   mvn spring-boot:run
+   cd frontend
+   pnpm install
+   pnpm dev
    ```
-3. Access the web interface at `http://localhost:8080`
+3. Open the dev server at `http://localhost:5173`.
 
 ## License
 

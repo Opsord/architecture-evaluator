@@ -13,6 +13,10 @@ on:
       - 'frontend/**'
       - '.github/workflows/frontend.yml'
 
+concurrency:
+  group: frontend-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   build:
     name: Build and analyze frontend
@@ -30,6 +34,9 @@ jobs:
       - name: Install dependencies
         working-directory: frontend
         run: pnpm install --frozen-lockfile
+      - name: Lint frontend
+        working-directory: frontend
+        run: pnpm run lint
       - name: Build production bundle
         working-directory: frontend
         run: pnpm run build
@@ -42,6 +49,6 @@ jobs:
           args: >
             -Dsonar.organization=opsord
             -Dsonar.projectKey=opsord_architecture-evaluator-frontend
-            -Dsonar.projectName=Architecture-Evaluator-Frontend
+            -Dsonar.projectName=Architecture_Evaluator-Frontend
             -Dsonar.sources=src
             -Dsonar.exclusions=**/MockData/**,**/*.d.ts

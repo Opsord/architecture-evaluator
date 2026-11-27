@@ -13,7 +13,7 @@ Run from `backend/`:
 ./mvnw -B verify -Pcoverage
 ```
 
-Java 17. Spring Boot 3.4.x. Default port **8080**. Dev profile is active (`application.properties`); `application-dev.properties` excludes `DataSourceAutoConfiguration` — there is **no database** at runtime despite `spring-boot-starter-data-jpa` on the classpath.
+Java 21 LTS. Spring Boot 3.4.x. Default port **8080**. There is **no database** at runtime (`spring-boot-starter-data-jpa` is not used). RFC 7807 `ProblemDetail` is enabled globally via `GlobalExceptionHandler`.
 
 Do not run Maven from the git root.
 
@@ -31,9 +31,9 @@ Package root: `io.github.opsord.architecture_evaluator_backend`.
 
 Only controller: `OrchestratorController` at `/api/orchestrator`.
 
-- `POST /analyze?projectPath=` — local path (dev/debug)
-- `POST /analyze-upload` — multipart field `project` (zip of a project)
-- `POST /analyze-github?repoUrl=` — GitHub HTTPS URL; downloads `{owner}/{repo}/archive/refs/heads/main.zip` only (`main` branch)
+- `POST /analyze?projectPath=` — local path (disabled by default with `403 Forbidden`; enable with `archev.local-analysis.enabled=true` or `--spring.profiles.active=dev`)
+- `POST /analyze-upload` — multipart field `project` (`.zip` or `.tar` archive up to 150 MB)
+- `POST /analyze-github?repoUrl=` — GitHub HTTPS URL; tries `main` branch first and falls back to `master` on HTTP 404
 
 Response type: `ProjectAnalysisInstance` (classes grouped by layer: entities, documents, repositories, services, controllers, testClasses, otherClasses, plus pom/gradle DTOs).
 
@@ -52,11 +52,10 @@ Metrics per class: LOC/methods/statements, approx McCabe CC, afferent/efferent c
 ## Gotchas
 
 - **LCOM4 depends on method names on statements.** Removing `structure`/source without keeping call names NPEs cohesion.
-- GitHub ingest **always uses `main`**, not the repo default branch.
+- GitHub ingest tries `main` first and falls back to `master` on HTTP 404.
 - Uploads up to 150MB; analysis can take minutes. HTTP GitHub timeouts are 15s connect / 120s read.
-- CORS allows Vite (`5173`), CRA (`3000`), and Docker frontend on port 80.
-- SonarCloud runs in `.github/workflows/sonarcloud.yml` (`mvn verify ... sonar -Pcoverage`). Local work does not need Sonar. `SONAR_TOKEN` is a repo secret.
-- This repo is a **submodule** at `backend/` in the parent. After merging here, bump the parent submodule pointer on a separate parent PR.
+- CORS origins are configurable via `archev.cors.allowed-origins` (defaults to Vite `5173`, CRA `3000`, and Docker frontend on port 80).
+- SonarCloud runs in `.github/workflows/backend.yml` (`./mvnw -B verify ... sonar -Pcoverage`). Local work does not need Sonar. `SONAR_TOKEN_BACK` is a repo secret.
 
 ## Boundaries
 
