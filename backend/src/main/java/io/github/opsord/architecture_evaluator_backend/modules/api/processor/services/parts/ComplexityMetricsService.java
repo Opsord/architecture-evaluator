@@ -1,6 +1,7 @@
 package io.github.opsord.architecture_evaluator_backend.modules.api.processor.services.parts;
 
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.ClassInstance;
+import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.JavaFileType;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.MethodInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.parts.StatementsInfo;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.parts.statement.StatementInstance;
@@ -31,24 +32,41 @@ public class ComplexityMetricsService {
                 ? classInstance.getMethods()
                 : Collections.emptyList();
 
+        JavaFileType fileType = classInstance.getJavaFileType();
+        boolean countBodylessMethods = MetricApplicabilityPolicy.countBodylessMethodsInComplexity(fileType);
+
         int compUnitApproxMcCabeCC = 0;
-        int numberOfMethods = programMetrics != null ? programMetrics.getNumberOfMethods() : methods.size();
+        int numberOfMethods = countBodylessMethods && programMetrics != null
+                ? programMetrics.getNumberOfMethods()
+                : (countBodylessMethods ? methods.size() : 0);
         int sumOfExecutableStatements = programMetrics != null
                 ? programMetrics.getSumOfExecutableStatements()
                 : countExecutableStatements(classInstance.getStatements());
-        int maxInputParameters = programMetrics != null ? programMetrics.getMaxInputParameters() : 0;
-        int maxOutputParameters = programMetrics != null ? programMetrics.getMaxOutputParameters() : 0;
+        int maxInputParameters = countBodylessMethods && programMetrics != null
+                ? programMetrics.getMaxInputParameters()
+                : 0;
+        int maxOutputParameters = countBodylessMethods && programMetrics != null
+                ? programMetrics.getMaxOutputParameters()
+                : 0;
         int totalLinesOfCode = programMetrics != null ? programMetrics.getLinesOfCode() : classInstance.getLinesOfCode();
 
         for (MethodInstance method : methods) {
-            if (programMetrics == null) {
+            boolean methodHasBody = hasBody(method);
+            boolean includeInImprovedCC = countBodylessMethods || methodHasBody;
+
+            if (!countBodylessMethods && methodHasBody) {
+                numberOfMethods++;
+            }
+            if (includeInImprovedCC && (!countBodylessMethods || programMetrics == null)) {
                 int inputParameters = method.getInputParameters() != null ? method.getInputParameters().size() : 0;
                 int outputParameters = method.getOutputParameters() != null ? method.getOutputParameters().size() : 0;
                 maxInputParameters = Math.max(maxInputParameters, inputParameters);
                 maxOutputParameters = Math.max(maxOutputParameters, outputParameters);
             }
 
-            int methodMcCabeCC = calculateApproxMcCabeCC(method);
+            int methodMcCabeCC = (!countBodylessMethods && !methodHasBody)
+                    ? 0
+                    : calculateApproxMcCabeCC(method);
             if (method.getMethodMetrics() != null) {
                 method.getMethodMetrics().setMcCabeComplexity(methodMcCabeCC);
             }
@@ -56,13 +74,19 @@ public class ComplexityMetricsService {
             compUnitApproxMcCabeCC += methodMcCabeCC;
         }
 
-        double improvedCC = calculateImprovedCC(numberOfMethods, sumOfExecutableStatements, maxInputParameters,
-                maxOutputParameters, totalLinesOfCode);
+        double improvedCC = (!countBodylessMethods && numberOfMethods == 0)
+                ? 0.0
+                : calculateImprovedCC(numberOfMethods, sumOfExecutableStatements, maxInputParameters,
+                        maxOutputParameters, totalLinesOfCode);
 
         complexityMetrics.setApproxMcCabeCC(compUnitApproxMcCabeCC);
         complexityMetrics.setImprovedCC(improvedCC);
 
         return complexityMetrics;
+    }
+
+    private boolean hasBody(MethodInstance method) {
+        return method.getBasicInfo() == null || method.getBasicInfo().isHasBody();
     }
 
     private int countExecutableStatements(List<StatementInstance> statements) {

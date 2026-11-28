@@ -24,11 +24,24 @@ function shouldShowDependencyLine(
     );
 }
 
+interface DependencyEdge {
+    key: string;
+    source: string;
+    target: string;
+    sourceLabel: string;
+    targetLabel: string;
+    from: [number, number, number];
+    to: [number, number, number];
+}
+
+interface RenderDependencyEdge extends DependencyEdge {
+    direction: "incoming" | "outgoing" | "other";
+}
+
 const DependencyLinesLayer: React.FC<DependencyLinesLayerProps> = ({
     cubes,
     classPosMap,
     selectedCube,
-    selectedUnit,
 }) => {
     const [hoveredLine, setHoveredLine] = useState<string | null>(null);
 
@@ -44,75 +57,71 @@ const DependencyLinesLayer: React.FC<DependencyLinesLayerProps> = ({
         return map;
     }, [cubes]);
 
-    const lines = useMemo(() => {
-        if (!selectedCube) {
-            return [];
-        }
-        const selectedCubeObj = cubeById.get(selectedCube);
-        if (!selectedCubeObj) {
-            return [];
-        }
-
-        const result: {
-            source: string;
-            target: string;
-            sourceLabel: string;
-            targetLabel: string;
-            from: [number, number, number];
-            to: [number, number, number];
-            direction: "incoming" | "outgoing" | "other";
-        }[] = [];
-
+    const allEdges = useMemo(() => {
+        const result: DependencyEdge[] = [];
         const seen = new Set<string>();
 
-        // Outgoing: selectedCube depends on depId -> tooltip: Class "${targetLabel}" depends on "${sourceLabel}"
-        const outgoingIds = new Set(selectedUnit?.classInstance?.classDependencies ?? []);
-        for (const depId of outgoingIds) {
-            if (depId === selectedCube) continue;
-            const depCube = cubeById.get(depId);
-            const from = classPosMap[depId];
-            if (!depCube || !from) continue;
-            if (!shouldShowDependencyLine(depCube, selectedCubeObj)) continue;
-            const key = `${depId}->${selectedCube}`;
-            if (seen.has(key)) continue;
+        const addEdge = (sourceCube: CompUnitVisual, targetCube: CompUnitVisual) => {
+            if (sourceCube.id === targetCube.id) return;
+            if (!shouldShowDependencyLine(sourceCube, targetCube)) return;
+            const from = classPosMap[sourceCube.id];
+            const to = classPosMap[targetCube.id];
+            if (!from || !to) return;
+            const key = `${sourceCube.id}->${targetCube.id}`;
+            if (seen.has(key)) return;
             seen.add(key);
             result.push({
-                source: depId,
-                target: selectedCube,
-                sourceLabel: depCube.displayName,
-                targetLabel: selectedCubeObj.displayName,
+                key,
+                source: sourceCube.id,
+                target: targetCube.id,
+                sourceLabel: sourceCube.displayName,
+                targetLabel: targetCube.displayName,
                 from,
-                to: selectedCubeObj.position,
-                direction: "outgoing",
-            });
-        }
-
-        // Incoming: dependentId depends on selectedCube
-        const incomingIds = new Set(selectedUnit?.classInstance?.dependentClasses ?? []);
-        for (const dependentId of incomingIds) {
-            if (dependentId === selectedCube) continue;
-            const dependentCube = cubeById.get(dependentId);
-            const to = classPosMap[dependentId];
-            if (!dependentCube || !to) continue;
-            if (!shouldShowDependencyLine(selectedCubeObj, dependentCube)) continue;
-            const key = `${selectedCube}->${dependentId}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            result.push({
-                source: selectedCube,
-                target: dependentId,
-                sourceLabel: selectedCubeObj.displayName,
-                targetLabel: dependentCube.displayName,
-                from: selectedCubeObj.position,
                 to,
-                direction: "incoming",
             });
+        };
+
+        for (const cube of cubes) {
+            const deps = cube.data.classInstance.classDependencies ?? [];
+            for (const depId of deps) {
+                const depCube = cubeById.get(depId);
+                if (depCube) {
+                    addEdge(depCube, cube);
+                }
+            }
+
+            const dependents = cube.data.classInstance.dependentClasses ?? [];
+            for (const dependentId of dependents) {
+                const dependentCube = cubeById.get(dependentId);
+                if (dependentCube) {
+                    addEdge(cube, dependentCube);
+                }
+            }
         }
 
         return result;
-    }, [classPosMap, cubeById, selectedCube, selectedUnit]);
+    }, [cubes, classPosMap, cubeById]);
 
-    if (!selectedCube) {
+    const lines = useMemo<RenderDependencyEdge[]>(() => {
+        if (!selectedCube) {
+            return allEdges.map((edge) => ({
+                ...edge,
+                direction: "other",
+            }));
+        }
+
+        const result: RenderDependencyEdge[] = [];
+        for (const edge of allEdges) {
+            if (edge.target === selectedCube) {
+                result.push({ ...edge, direction: "outgoing" });
+            } else if (edge.source === selectedCube) {
+                result.push({ ...edge, direction: "incoming" });
+            }
+        }
+        return result;
+    }, [allEdges, selectedCube]);
+
+    if (lines.length === 0) {
         return null;
     }
 
@@ -120,15 +129,15 @@ const DependencyLinesLayer: React.FC<DependencyLinesLayerProps> = ({
         <>
             {lines.map((line) => (
                 <DependencyLine
-                    key={line.source + "->" + line.target}
+                    key={line.key}
                     from={line.from}
                     to={line.to}
                     source={line.source}
                     target={line.target}
                     sourceLabel={line.sourceLabel}
                     targetLabel={line.targetLabel}
-                    hoveredLine={hoveredLine}
-                    isConnected={selectedCube === line.source || selectedCube === line.target}
+                    isHovered={hoveredLine === line.key}
+                    isConnected={selectedCube !== null && (selectedCube === line.source || selectedCube === line.target)}
                     setHoveredLine={setHoveredLine}
                     direction={line.direction}
                 />

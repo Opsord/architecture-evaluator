@@ -6,6 +6,7 @@ export interface BasicInfo {
     accessModifier: string;
     returnType: string;
     isStatic?: boolean;
+    hasBody?: boolean;
 }
 
 export interface MethodMetrics {

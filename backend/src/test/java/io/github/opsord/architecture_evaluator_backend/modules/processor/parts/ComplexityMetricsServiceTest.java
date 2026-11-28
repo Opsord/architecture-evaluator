@@ -1,11 +1,15 @@
 package io.github.opsord.architecture_evaluator_backend.modules.processor.parts;
 
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.ClassInstance;
+import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.JavaFileType;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.ParameterInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.MethodInstance;
+import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.parts.BasicInfo;
+import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.parts.MethodMetrics;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.parts.statement.StatementInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.parts.StatementsInfo;
 import io.github.opsord.architecture_evaluator_backend.modules.api.processor.dto.parts.ComplexityMetricsDTO;
+import io.github.opsord.architecture_evaluator_backend.modules.api.processor.dto.parts.ProgramMetricsDTO;
 import io.github.opsord.architecture_evaluator_backend.modules.api.processor.services.parts.ComplexityMetricsService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -146,5 +150,76 @@ class ComplexityMetricsServiceTest {
 
         ComplexityMetricsDTO dto = service.calculateComplexityMetrics(classInstance);
         assertEquals(1, dto.getApproxMcCabeCC());
+    }
+
+    @Test
+    void testPureInterfaceHasZeroComplexityAndZeroImprovedCC() {
+        MethodInstance sig1 = method(0, 0, 2, 1);
+        BasicInfo bi1 = new BasicInfo();
+        bi1.setHasBody(false);
+        sig1.setBasicInfo(bi1);
+        sig1.setMethodMetrics(new MethodMetrics());
+
+        MethodInstance sig2 = method(0, 0, 1, 1);
+        BasicInfo bi2 = new BasicInfo();
+        bi2.setHasBody(false);
+        sig2.setBasicInfo(bi2);
+        sig2.setMethodMetrics(new MethodMetrics());
+
+        ClassInstance iface = new ClassInstance();
+        iface.setJavaFileType(JavaFileType.INTERFACE);
+        iface.setMethods(List.of(sig1, sig2));
+        iface.setStatements(Collections.emptyList());
+        iface.setLinesOfCode(10);
+
+        ProgramMetricsDTO pm = new ProgramMetricsDTO();
+        pm.setNumberOfMethods(2);
+        pm.setSumOfExecutableStatements(0);
+        pm.setMaxInputParameters(2);
+        pm.setMaxOutputParameters(1);
+        pm.setLinesOfCode(10);
+
+        ComplexityMetricsDTO dto = service.calculateComplexityMetrics(iface, pm);
+        assertEquals(0, dto.getApproxMcCabeCC());
+        assertEquals(0, dto.getMaxMethodMcCabeCC());
+        assertEquals(0.0, dto.getImprovedCC());
+        assertEquals(0, sig1.getMethodMetrics().getMcCabeComplexity());
+        assertEquals(0, sig2.getMethodMetrics().getMcCabeComplexity());
+    }
+
+    @Test
+    void testMixedInterfaceCountsOnlyDefaultMethodWithBody() {
+        MethodInstance sig = method(0, 0, 5, 1);
+        BasicInfo sigInfo = new BasicInfo();
+        sigInfo.setHasBody(false);
+        sig.setBasicInfo(sigInfo);
+        sig.setMethodMetrics(new MethodMetrics());
+
+        MethodInstance defaultMethod = method(2, 1, 1, 1);
+        BasicInfo defaultInfo = new BasicInfo();
+        defaultInfo.setHasBody(true);
+        defaultMethod.setBasicInfo(defaultInfo);
+        defaultMethod.setMethodMetrics(new MethodMetrics());
+
+        ClassInstance iface = new ClassInstance();
+        iface.setJavaFileType(JavaFileType.INTERFACE);
+        iface.setMethods(List.of(sig, defaultMethod));
+        iface.setStatements(executableStatements(2));
+        iface.setLinesOfCode(10);
+
+        ProgramMetricsDTO pm = new ProgramMetricsDTO();
+        pm.setNumberOfMethods(2);
+        pm.setSumOfExecutableStatements(2);
+        pm.setMaxInputParameters(5);
+        pm.setMaxOutputParameters(1);
+        pm.setLinesOfCode(10);
+
+        ComplexityMetricsDTO dto = service.calculateComplexityMetrics(iface, pm);
+        assertEquals(2, dto.getApproxMcCabeCC());
+        assertEquals(2, dto.getMaxMethodMcCabeCC());
+        // improvedCC uses only defaultMethod: (1 method + 2 stmts + 1 in + 1 out) / 10 = 0.5
+        assertEquals(0.5, dto.getImprovedCC());
+        assertEquals(0, sig.getMethodMetrics().getMcCabeComplexity());
+        assertEquals(2, defaultMethod.getMethodMetrics().getMcCabeComplexity());
     }
 }

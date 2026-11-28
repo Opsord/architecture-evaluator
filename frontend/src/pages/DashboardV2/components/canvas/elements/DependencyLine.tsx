@@ -29,26 +29,25 @@ interface DependencyLineProps {
     target: string;
     sourceLabel?: string;
     targetLabel?: string;
-    hoveredLine: string | null;
+    isHovered: boolean;
     isConnected: boolean;
     setHoveredLine: (key: string | null) => void;
     direction?: "incoming" | "outgoing" | "other";
 }
 
 const DependencyLine: React.FC<DependencyLineProps> = ({
-                                                           from,
-                                                           to,
-                                                           source,
-                                                           target,
-                                                           sourceLabel,
-                                                           targetLabel,
-                                                           hoveredLine,
-                                                           isConnected,
-                                                           setHoveredLine,
-                                                           direction = "other",
-                                                       }) => {
+    from,
+    to,
+    source,
+    target,
+    sourceLabel,
+    targetLabel,
+    isHovered,
+    isConnected,
+    setHoveredLine,
+    direction = "other",
+}) => {
     const lineKey = `${source}->${target}`;
-    const isHovered = hoveredLine === lineKey;
 
     const { curvePoints, tooltipPosition } = useMemo(() => {
         const fromVec = new Vector3(...from);
@@ -110,4 +109,4 @@ const DependencyLine: React.FC<DependencyLineProps> = ({
     );
 };
 
-export default DependencyLine;
+export default React.memo(DependencyLine);

@@ -1,6 +1,7 @@
 import React from 'react';
 import { FaArrowLeft, FaLayerGroup, FaChartLine, FaEye } from 'react-icons/fa';
 import { useNavigation } from '../../context/NavigationContext';
+import { IS_DEMO_MODE } from '../../config/demo';
 
 const Instructions: React.FC = () => {
     const { setCurrentPage } = useNavigation();
@@ -115,7 +116,8 @@ const Instructions: React.FC = () => {
                             <p className="text-gray-dark leading-relaxed">
                                 Measures how much the methods of a class collaborate with each other. A value close to 0
                                 indicates high cohesion (methods work on the same data), while a value close to 1
-                                suggests low cohesion (each method does different things).
+                                suggests low cohesion (each method does different things). Cohesion is not applicable to
+                                interfaces, enums, annotations, exceptions, or records, which are shown as N/A.
                             </p>
                         </div>
 
@@ -142,7 +144,7 @@ const Instructions: React.FC = () => {
 
                     <p className="text-lg text-gray-dark mb-6 leading-relaxed">
                         To facilitate visual interpretation of results, the application uses different
-                        graphical effects. The three main ones are explained below:
+                        graphical effects. The four main ones are explained below:
                     </p>
 
                     <div className="space-y-8">
@@ -153,28 +155,28 @@ const Instructions: React.FC = () => {
                             </h3>
                             <p className="text-gray-dark mb-4 leading-relaxed">
                                 Each class or component is shown with a background color representing its method
-                                with the highest complexity level:
+                                with the highest complexity level (pure interface signatures without bodies have CC = 0):
                             </p>
                             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                                 <div className="bg-green-100 border-2 border-green-300 rounded-lg p-4 text-center">
                                     <div className="text-2xl mb-2">🟩</div>
                                     <div className="font-bold text-green-700">Green</div>
-                                    <div className="text-sm text-green-600">Low (1 to 10)</div>
+                                    <div className="text-sm text-green-600">Low (0 to 10)</div>
                                 </div>
                                 <div className="bg-yellow-100 border-2 border-yellow-300 rounded-lg p-4 text-center">
                                     <div className="text-2xl mb-2">🟨</div>
                                     <div className="font-bold text-yellow-700">Yellow</div>
-                                    <div className="text-sm text-yellow-600">Medium (10 to 20)</div>
+                                    <div className="text-sm text-yellow-600">Medium (11 to 20)</div>
                                 </div>
                                 <div className="bg-orange-100 border-2 border-orange-300 rounded-lg p-4 text-center">
                                     <div className="text-2xl mb-2">🟧</div>
                                     <div className="font-bold text-orange-700">Orange</div>
-                                    <div className="text-sm text-orange-600">High (20 to 40)</div>
+                                    <div className="text-sm text-orange-600">High (21 to 40)</div>
                                 </div>
                                 <div className="bg-red-100 border-2 border-red-300 rounded-lg p-4 text-center">
                                     <div className="text-2xl mb-2">🟥</div>
                                     <div className="font-bold text-red-700">Red</div>
-                                    <div className="text-sm text-red-600">Very High (40+)</div>
+                                    <div className="text-sm text-red-600">Very High (41+)</div>
                                 </div>
                             </div>
                         </div>
@@ -185,19 +187,123 @@ const Instructions: React.FC = () => {
                                 Shape: Cohesion (LCOM5)
                             </h3>
                             <p className="text-gray-dark mb-4 leading-relaxed">
-                                The level of visual deformation in the boxes indicates the LCOM5 value:
+                                The level of visual deformation in the boxes indicates the LCOM5 value (types without
+                                applicable cohesion, such as interfaces, enums, annotations, exceptions, and records,
+                                keep a regular undistorted box):
                             </p>
                             <div className="space-y-3">
                                 <div className="flex items-center gap-4">
                                     <div className="w-16 h-8 bg-primary rounded border-2 border-primary-dark"></div>
                                     <p className="text-gray-dark">
-                                        <span className="font-bold">Well-defined rectangular shape:</span> high cohesion (LCOM5 close to 0)
+                                        <span className="font-bold">Well-defined rectangular shape:</span> high cohesion (LCOM5 close to 0) or N/A
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-4">
                                     <div className="w-16 h-8 bg-primary rounded border-2 border-primary-dark transform skew-x-12 skew-y-3"></div>
                                     <p className="text-gray-dark">
                                         <span className="font-bold">Distorted or irregular shape:</span> low cohesion (LCOM5 close to 1)
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Pattern Section */}
+                        <div className="bg-white/70 rounded-xl p-6 shadow-lg">
+                            <h3 className="text-2xl font-bold text-bright-turquoise-600 mb-4">
+                                Pattern: Java Type
+                            </h3>
+                            <p className="text-gray-dark mb-4 leading-relaxed">
+                                Surface patterns distinguish Java declaration types on every box while preserving complexity and selection colors:
+                            </p>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="flex items-center gap-4">
+                                    <div className="w-16 h-8 shrink-0 bg-[#2ec4b6] rounded border-2 border-primary-dark"></div>
+                                    <p className="text-gray-dark">
+                                        <span className="font-bold">Solid:</span> concrete Java classes
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div
+                                        className="w-16 h-8 shrink-0 rounded border-2 border-swamp-900"
+                                        style={{
+                                            backgroundImage:
+                                                "repeating-linear-gradient(-45deg, #2ec4b6 0px, #2ec4b6 6px, #0b3d3a 6px, #0b3d3a 12px)",
+                                        }}
+                                    ></div>
+                                    <p className="text-gray-dark">
+                                        <span className="font-bold">Diagonal stripes:</span> interfaces (contracts)
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div
+                                        className="w-16 h-8 shrink-0 rounded border-2 border-swamp-900"
+                                        style={{
+                                            backgroundColor: "#2ec4b6",
+                                            backgroundImage: "radial-gradient(#0b3d3a 2.5px, transparent 2.5px)",
+                                            backgroundSize: "10px 10px",
+                                        }}
+                                    ></div>
+                                    <p className="text-gray-dark">
+                                        <span className="font-bold">Dotted:</span> abstract classes
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div
+                                        className="w-16 h-8 shrink-0 rounded border-2 border-swamp-900 flex items-center justify-center"
+                                        style={{
+                                            backgroundColor: "#2ec4b6",
+                                            boxShadow: "inset 0 0 0 4px #0b3d3a",
+                                        }}
+                                    >
+                                        <div className="w-7 h-3 border-2 border-[#0b3d3a]"></div>
+                                    </div>
+                                    <p className="text-gray-dark">
+                                        <span className="font-bold">Framed / beveled:</span> records (immutable data)
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div
+                                        className="w-16 h-8 shrink-0 rounded border-2 border-swamp-900"
+                                        style={{
+                                            backgroundImage:
+                                                "repeating-linear-gradient(0deg, #2ec4b6 0px, #2ec4b6 4px, #0b3d3a 4px, #0b3d3a 8px)",
+                                        }}
+                                    ></div>
+                                    <p className="text-gray-dark">
+                                        <span className="font-bold">Horizontal bands:</span> enums (constant lists)
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <svg
+                                        viewBox="0 0 64 32"
+                                        className="w-16 h-8 shrink-0 rounded border-2 border-swamp-900"
+                                        aria-hidden="true"
+                                    >
+                                        <rect width="64" height="32" fill="#2ec4b6" />
+                                        <path
+                                            d="M0 10 L32 3 L64 10 M0 20 L32 13 L64 20 M0 30 L32 23 L64 30"
+                                            fill="none"
+                                            stroke="#0b3d3a"
+                                            strokeWidth="3.8"
+                                        />
+                                    </svg>
+                                    <p className="text-gray-dark">
+                                        <span className="font-bold">Chevron:</span> exceptions (error types)
+                                    </p>
+                                </div>
+                                <div className="flex items-center gap-4">
+                                    <div
+                                        className="w-16 h-8 shrink-0 rounded border-2 border-swamp-900 flex items-center justify-center text-base font-extrabold"
+                                        style={{
+                                            backgroundColor: "#2ec4b6",
+                                            color: "#0b3d3a",
+                                            boxShadow: "inset 0 0 0 2px #0b3d3a",
+                                        }}
+                                    >
+                                        @
+                                    </div>
+                                    <p className="text-gray-dark">
+                                        <span className="font-bold">@ symbol:</span> annotations (@interface)
                                     </p>
                                 </div>
                             </div>
@@ -248,10 +354,10 @@ const Instructions: React.FC = () => {
                 {/* Action Button */}
                 <div className="text-center">
                     <button
-                        onClick={() => setCurrentPage('load')}
+                        onClick={() => setCurrentPage(IS_DEMO_MODE ? 'dashboard' : 'load')}
                         className="bg-gradient-to-r from-primary to-bright-turquoise-400 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:scale-105 transition-transform duration-200 text-lg"
                     >
-                        Start Analyzing My Project!
+                        {IS_DEMO_MODE ? 'Explore Sample Dashboard' : 'Start Analyzing My Project!'}
                     </button>
                 </div>
             </div>

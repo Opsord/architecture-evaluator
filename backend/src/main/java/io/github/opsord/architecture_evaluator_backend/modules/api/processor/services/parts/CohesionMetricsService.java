@@ -18,10 +18,13 @@ public class CohesionMetricsService {
     private static final String INSTANCE_SCOPE = "instance";
 
     public CohesionMetricsDTO calculateCohesionMetrics(ClassInstance classInstance) {
-        CohesionMetricsDTO metrics = new CohesionMetricsDTO();
         if (classInstance == null) {
-            return metrics;
+            return new CohesionMetricsDTO();
         }
+        if (!MetricApplicabilityPolicy.supportsCohesion(classInstance.getJavaFileType())) {
+            return null;
+        }
+        CohesionMetricsDTO metrics = new CohesionMetricsDTO();
 
         // Exclude static methods from cohesion (they cannot access instance fields)
         List<MethodInstance> allMethods = classInstance.getMethods() != null

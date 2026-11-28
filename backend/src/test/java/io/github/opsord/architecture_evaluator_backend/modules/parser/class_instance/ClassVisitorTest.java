@@ -184,4 +184,41 @@ class ClassVisitorTest {
         assertEquals(JavaFileType.ABSTRACT_CLASS, result.get(3).getJavaFileType());
     }
 
+    @Test
+    void testExceptionTypeAndSpringDataRepositoryHeuristic() {
+        String source = """
+            package com.acme.domain;
+
+            public class OrderNotFoundException extends RuntimeException {}
+            public abstract class BaseDomainException extends Exception {}
+            public class FatalCondition extends Error {}
+            public class CustomThrowable extends Throwable {}
+            public class ValidationError extends BaseError {}
+            public interface ErrorContract extends Error {}
+            public interface OrderRepository extends JpaRepository<Order, Long> {}
+            public interface AuditRepository extends ListCrudRepository<Audit, Long> {}
+            public interface DomainPort extends Repository {}
+        """;
+
+        CompilationUnit cu = StaticJavaParser.parse(source);
+        List<ClassInstance> result = classService.getClassesFromCompUnit(cu);
+
+        assertEquals(9, result.size());
+        assertEquals(JavaFileType.EXCEPTION, result.get(0).getJavaFileType());
+        assertEquals(JavaFileType.EXCEPTION, result.get(1).getJavaFileType());
+        assertEquals(JavaFileType.EXCEPTION, result.get(2).getJavaFileType());
+        assertEquals(JavaFileType.EXCEPTION, result.get(3).getJavaFileType());
+        assertEquals(JavaFileType.CLASS, result.get(4).getJavaFileType()); // ValidationError extends BaseError -> not EXCEPTION
+        assertEquals(JavaFileType.INTERFACE, result.get(5).getJavaFileType());
+
+        assertEquals(JavaFileType.INTERFACE, result.get(6).getJavaFileType());
+        assertEquals(LayerAnnotation.REPOSITORY, result.get(6).getLayerAnnotation());
+
+        assertEquals(JavaFileType.INTERFACE, result.get(7).getJavaFileType());
+        assertEquals(LayerAnnotation.REPOSITORY, result.get(7).getLayerAnnotation());
+
+        assertEquals(JavaFileType.INTERFACE, result.get(8).getJavaFileType());
+        assertEquals(LayerAnnotation.OTHER, result.get(8).getLayerAnnotation());
+    }
+
 }

@@ -1,8 +1,18 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
-import { Html } from "@react-three/drei";
+import { Edges, Html } from "@react-three/drei";
 import { BoxGeometry, Group } from "three";
 import { useFrame } from "@react-three/fiber";
 import type { ProcessedClassInstance } from "../../../../../types/ProcessedClassInstance.ts";
+import { getFileTypeTexture } from "./fileTypeTextures.ts";
+
+const FILE_TYPE_STEREOTYPE: Partial<Record<string, string>> = {
+    INTERFACE: "«interface»",
+    ABSTRACT_CLASS: "«abstract»",
+    RECORD: "«record»",
+    ENUM: "«enum»",
+    EXCEPTION: "«exception»",
+    ANNOTATION: "«annotation»",
+};
 
 const COLOR_DEPENDENCY = "#0cdc3d";
 const COLOR_DEPENDENT = "#ffda47";
@@ -90,6 +100,9 @@ const CubeElement: React.FC<CubeProps> = ({
 }) => {
     const [hovered, setHovered] = useState(false);
 
+    const fileType = unit?.classInstance?.javaFileType;
+    const typeTexture = useMemo(() => getFileTypeTexture(fileType), [fileType]);
+
     const lcom = unit?.classAnalysisInstance?.cohesionMetrics?.lackOfCohesion5 ?? 0;
     const cc = unit?.classAnalysisInstance?.complexityMetrics?.maxMethodMcCabeCC ?? 1;
     const instability = unit?.classAnalysisInstance?.couplingMetrics?.instability ?? 0;
@@ -155,10 +168,13 @@ const CubeElement: React.FC<CubeProps> = ({
                 }}
             >
                 <meshStandardMaterial
+                    key={typeTexture ? "textured" : "solid"}
                     color={color}
+                    map={typeTexture}
                     transparent={!!dimmed}
                     opacity={dimmed ? OPACITY_DIMMED : 1}
                 />
+                {typeTexture && !dimmed && <Edges threshold={15} color="#0b2e31" />}
             </mesh>
             {(hovered || isSelected) && (
                 <Html position={[0, size[1] / 2 + 0.7, 0]}>
@@ -169,7 +185,13 @@ const CubeElement: React.FC<CubeProps> = ({
                         borderRadius: "4px",
                         fontSize: "0.8rem",
                         boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                        whiteSpace: "nowrap",
                     }}>
+                        {fileType && FILE_TYPE_STEREOTYPE[fileType] && (
+                            <span style={{ fontSize: "0.7rem", color: "#0e6b70", marginRight: "4px", fontWeight: 600 }}>
+                                {FILE_TYPE_STEREOTYPE[fileType]}
+                            </span>
+                        )}
                         {label}
                     </div>
                 </Html>

@@ -13,5 +13,5 @@ export interface ClassAnalysisInstance {
     programMetrics: ProgramMetrics;
     complexityMetrics: ComplexityMetrics;
     couplingMetrics: CouplingMetrics;
-    cohesionMetrics: CohesionMetrics;
+    cohesionMetrics?: CohesionMetrics | null;
 }

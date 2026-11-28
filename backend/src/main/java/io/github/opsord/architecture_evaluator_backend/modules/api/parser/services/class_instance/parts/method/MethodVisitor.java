@@ -147,6 +147,7 @@ public class MethodVisitor extends VoidVisitorAdapter<List<MethodInstance>> {
         basicInfo.setAccessModifier(method.getAccessSpecifier().asString());
         basicInfo.setReturnType(method.getType().asString());
         basicInfo.setStatic(method.isStatic());
+        basicInfo.setHasBody(method.getBody().isPresent());
         return basicInfo;
     }
 

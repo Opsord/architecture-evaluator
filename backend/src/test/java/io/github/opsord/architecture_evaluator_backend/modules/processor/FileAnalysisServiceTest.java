@@ -93,18 +93,20 @@ class FileAnalysisServiceTest {
     }
 
     @Test
-    void testAnalyseFileInstance_countsRecordEnumAbstractClassAndAnnotation() {
+    void testAnalyseFileInstance_countsRecordEnumAbstractClassExceptionAndAnnotation() {
         ClassInstance rec = new ClassInstance();
         rec.setJavaFileType(JavaFileType.RECORD);
         ClassInstance en = new ClassInstance();
         en.setJavaFileType(JavaFileType.ENUM);
         ClassInstance abs = new ClassInstance();
         abs.setJavaFileType(JavaFileType.ABSTRACT_CLASS);
+        ClassInstance ex = new ClassInstance();
+        ex.setJavaFileType(JavaFileType.EXCEPTION);
         ClassInstance ann = new ClassInstance();
         ann.setJavaFileType(JavaFileType.ANNOTATION);
 
         FileInstance fileInstance = new FileInstance();
-        fileInstance.setClasses(List.of(rec, en, abs, ann));
+        fileInstance.setClasses(List.of(rec, en, abs, ex, ann));
 
         when(importClassifierService.classifyDependencies(any(), any(), eq(fileInstance), any()))
                 .thenReturn(Map.of());
@@ -114,8 +116,8 @@ class FileAnalysisServiceTest {
         List<ProcessedClassInstance> result = fileAnalysisService.analyseFileInstance(
                 fileInstance, "com.example", Optional.empty(), Optional.empty());
 
-        assertEquals(4, result.size());
-        assertEquals(3, result.get(0).getClassAnalysisInstance().getClassCount());
+        assertEquals(5, result.size());
+        assertEquals(4, result.get(0).getClassAnalysisInstance().getClassCount());
         assertEquals(1, result.get(0).getClassAnalysisInstance().getInterfaceCount());
     }
 }

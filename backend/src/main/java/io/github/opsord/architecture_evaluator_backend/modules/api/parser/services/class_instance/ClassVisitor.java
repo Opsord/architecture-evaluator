@@ -54,6 +54,16 @@ public class ClassVisitor extends VoidVisitorAdapter<List<ClassInstance>> {
     private static final Set<String> SERVICE_ANNOTATIONS = Set.of("Service");
     private static final Set<String> REPOSITORY_ANNOTATIONS = Set.of("Repository");
     private static final Set<String> CONTROLLER_ANNOTATIONS = Set.of("Controller", "RestController");
+    private static final Set<String> SPRING_DATA_REPOSITORY_INTERFACES = Set.of(
+            "JpaRepository",
+            "CrudRepository",
+            "ListCrudRepository",
+            "PagingAndSortingRepository",
+            "ListPagingAndSortingRepository",
+            "MongoRepository",
+            "ReactiveCrudRepository",
+            "ReactiveSortingRepository",
+            "R2dbcRepository");
     private static final Set<String> TESTING_CLASS_ANNOTATIONS = Set.of(
             "SpringBootTest", "WebMvcTest", "DataJpaTest", "ExtendWith", "Test");
     private static final Set<String> TESTING_METHOD_ANNOTATIONS = Set.of(
@@ -112,9 +122,9 @@ public class ClassVisitor extends VoidVisitorAdapter<List<ClassInstance>> {
         instance.setQualifiedName(qualifiedName);
 
         setJavaFileType(declaration, instance);
+        setInheritance(declaration, instance);
         setAnnotationsAndLayer(declaration, instance);
         setExceptionHandling(declaration, instance);
-        setInheritance(declaration, instance);
         setMembers(declaration, instance);
         setInnerClasses(declaration, instance, packageName);
         instance.setUsedClasses(collectUsedClasses(declaration));
@@ -133,6 +143,8 @@ public class ClassVisitor extends VoidVisitorAdapter<List<ClassInstance>> {
         if (declaration instanceof ClassOrInterfaceDeclaration classDecl) {
             if (classDecl.isInterface()) {
                 instance.setJavaFileType(JavaFileType.INTERFACE);
+            } else if (extendsExceptionHierarchy(classDecl)) {
+                instance.setJavaFileType(JavaFileType.EXCEPTION);
             } else if (classDecl.isAbstract()) {
                 instance.setJavaFileType(JavaFileType.ABSTRACT_CLASS);
             } else {
@@ -147,6 +159,19 @@ public class ClassVisitor extends VoidVisitorAdapter<List<ClassInstance>> {
         } else {
             instance.setJavaFileType(JavaFileType.UNKNOWN);
         }
+    }
+
+    /**
+     * Syntactic heuristic for exception classes (without cross-file symbol resolution).
+     * Matches direct supertypes ending in "Exception" or exact "Error" / "Throwable"
+     * to avoid false positives on domain DTO hierarchies such as ApiError / BaseError.
+     */
+    private boolean extendsExceptionHierarchy(ClassOrInterfaceDeclaration classDecl) {
+        return classDecl.getExtendedTypes().stream()
+                .map(NodeWithSimpleName::getNameAsString)
+                .anyMatch(name -> name.endsWith("Exception")
+                        || "Error".equals(name)
+                        || "Throwable".equals(name));
     }
 
     private void setAnnotationsAndLayer(TypeDeclaration<?> declaration, ClassInstance instance) {
@@ -166,12 +191,22 @@ public class ClassVisitor extends VoidVisitorAdapter<List<ClassInstance>> {
             instance.setLayerAnnotation(LayerAnnotation.REPOSITORY);
         } else if (annotations.stream().anyMatch(CONTROLLER_ANNOTATIONS::contains)) {
             instance.setLayerAnnotation(LayerAnnotation.CONTROLLER);
+        } else if (isSpringDataRepositoryInterface(instance)) {
+            instance.setLayerAnnotation(LayerAnnotation.REPOSITORY);
         } else if (annotations.stream().anyMatch(TESTING_CLASS_ANNOTATIONS::contains)
                 || hasDirectTestMethod(declaration)) {
             instance.setLayerAnnotation(LayerAnnotation.TESTING);
         } else {
             instance.setLayerAnnotation(LayerAnnotation.OTHER);
         }
+    }
+
+    private boolean isSpringDataRepositoryInterface(ClassInstance instance) {
+        if (instance.getJavaFileType() != JavaFileType.INTERFACE || instance.getSuperClasses() == null) {
+            return false;
+        }
+        return instance.getSuperClasses().stream()
+                .anyMatch(SPRING_DATA_REPOSITORY_INTERFACES::contains);
     }
 
     private boolean hasDirectTestMethod(TypeDeclaration<?> declaration) {

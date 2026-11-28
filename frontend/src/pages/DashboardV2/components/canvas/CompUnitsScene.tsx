@@ -107,9 +107,10 @@ const CompUnitsScene: React.FC<CompUnitsSceneProps> = ({
                 (a, b) => (b.classInstance?.linesOfCode ?? 0) - (a.classInstance?.linesOfCode ?? 0),
             );
             const centeredUnits: ProcessedClassInstance[] = new Array(sortedUnits.length);
-            let leftIdx = Math.floor(sortedUnits.length / 2) - 1;
-            let rightIdx = Math.floor(sortedUnits.length / 2) + 1;
-            centeredUnits[Math.floor(sortedUnits.length / 2)] = sortedUnits[0];
+            const midIdx = Math.floor((sortedUnits.length - 1) / 2);
+            let leftIdx = midIdx - 1;
+            let rightIdx = midIdx + 1;
+            centeredUnits[midIdx] = sortedUnits[0];
             for (let i = 1; i < sortedUnits.length; i++) {
                 if (i % 2 === 1) centeredUnits[rightIdx++] = sortedUnits[i];
                 else centeredUnits[leftIdx--] = sortedUnits[i];

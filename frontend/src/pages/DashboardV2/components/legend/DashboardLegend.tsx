@@ -29,7 +29,7 @@ const DashboardLegend: React.FC = () => (
                 <div className="flex flex-col items-center">
                     <div className="w-6 h-4 bg-green-400 rounded border border-green-500 mb-1"></div>
                     <span className="text-sm text-gray-700 font-medium">Low</span>
-                    <span className="text-xs text-gray-500">(1–10)</span>
+                    <span className="text-xs text-gray-500">(0–10)</span>
                 </div>
                 <div className="flex flex-col items-center">
                     <div className="w-6 h-4 bg-yellow-400 rounded border border-yellow-500 mb-1"></div>
@@ -64,6 +64,89 @@ const DashboardLegend: React.FC = () => (
                     <div className="flex flex-col items-center">
                         <div className="w-6 h-3 bg-primary rounded border border-primary-dark transform skew-x-12 skew-y-3 mb-1"></div>
                         <span className="text-xs text-gray-700 text-center">Low cohesion</span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Pattern: Java Type */}
+            <div className="mb-3">
+                <div className="font-semibold text-gray-700 mb-1 text-sm text-center">Pattern: Java Type</div>
+                <div className="grid grid-cols-2 gap-2 px-1 py-2">
+                    <div className="flex flex-col items-center">
+                        <div className="w-6 h-4 bg-[#2ec4b6] rounded border border-primary-dark mb-1"></div>
+                        <span className="text-[11px] text-gray-700 text-center">Class</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                        <div
+                            className="w-6 h-4 rounded border-2 border-swamp-900 mb-1"
+                            style={{
+                                backgroundImage:
+                                    "repeating-linear-gradient(-45deg, #2ec4b6 0px, #2ec4b6 3px, #0b3d3a 3px, #0b3d3a 6px)",
+                            }}
+                        ></div>
+                        <span className="text-[11px] text-gray-700 text-center">Interface</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                        <div
+                            className="w-6 h-4 rounded border-2 border-swamp-900 mb-1"
+                            style={{
+                                backgroundColor: "#2ec4b6",
+                                backgroundImage: "radial-gradient(#0b3d3a 1.5px, transparent 1.5px)",
+                                backgroundSize: "6px 6px",
+                            }}
+                        ></div>
+                        <span className="text-[11px] text-gray-700 text-center">Abstract</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                        <div
+                            className="w-6 h-4 rounded border-2 border-swamp-900 mb-1 flex items-center justify-center"
+                            style={{
+                                backgroundColor: "#2ec4b6",
+                                boxShadow: "inset 0 0 0 2px #0b3d3a",
+                            }}
+                        >
+                            <div className="w-2.5 h-1.5 border border-[#0b3d3a]"></div>
+                        </div>
+                        <span className="text-[11px] text-gray-700 text-center">Record</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                        <div
+                            className="w-6 h-4 rounded border-2 border-swamp-900 mb-1"
+                            style={{
+                                backgroundImage:
+                                    "repeating-linear-gradient(0deg, #2ec4b6 0px, #2ec4b6 2px, #0b3d3a 2px, #0b3d3a 4px)",
+                            }}
+                        ></div>
+                        <span className="text-[11px] text-gray-700 text-center">Enum</span>
+                    </div>
+                    <div className="flex flex-col items-center">
+                        <svg
+                            viewBox="0 0 24 16"
+                            className="w-6 h-4 rounded border-2 border-swamp-900 mb-1"
+                            aria-hidden="true"
+                        >
+                            <rect width="24" height="16" fill="#2ec4b6" />
+                            <path
+                                d="M0 6 L12 2 L24 6 M0 12 L12 8 L24 12 M0 18 L12 14 L24 18"
+                                fill="none"
+                                stroke="#0b3d3a"
+                                strokeWidth="2.4"
+                            />
+                        </svg>
+                        <span className="text-[11px] text-gray-700 text-center">Exception</span>
+                    </div>
+                    <div className="flex flex-col items-center col-span-2">
+                        <div
+                            className="w-6 h-4 rounded border-2 border-swamp-900 mb-1 flex items-center justify-center text-[10px] font-extrabold leading-none"
+                            style={{
+                                backgroundColor: "#2ec4b6",
+                                color: "#0b3d3a",
+                                boxShadow: "inset 0 0 0 1px #0b3d3a",
+                            }}
+                        >
+                            @
+                        </div>
+                        <span className="text-[11px] text-gray-700 text-center">Annotation</span>
                     </div>
                 </div>
             </div>

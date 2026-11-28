@@ -47,6 +47,8 @@ const ProcessedClassInfoCard: React.FC<{ unit: ProcessedClassInstance | null }> 
 
     const classInstance = unit.classInstance ?? {};
     const classLayerAnnotation = classInstance.layerAnnotation ?? "UNKNOWN";
+    const rawFileType = classInstance.javaFileType;
+    const formattedFileType = rawFileType ? rawFileType.replace(/_/g, " ") : null;
     const trimmedPackage = classInstance.packageName?.trim();
     const packageName = trimmedPackage && trimmedPackage !== "default"
         ? trimmedPackage
@@ -55,7 +57,16 @@ const ProcessedClassInfoCard: React.FC<{ unit: ProcessedClassInstance | null }> 
     const programMetrics = analysis.programMetrics ?? {};
     const complexityMetrics = analysis.complexityMetrics ?? {};
     const couplingMetrics = analysis.couplingMetrics ?? {};
-    const cohesionMetrics = analysis.cohesionMetrics ?? {};
+    const cohesionMetrics = analysis.cohesionMetrics ?? null;
+    const hasCohesionMetrics =
+        cohesionMetrics != null &&
+        [
+            cohesionMetrics.lackOfCohesion1,
+            cohesionMetrics.lackOfCohesion2,
+            cohesionMetrics.lackOfCohesion3,
+            cohesionMetrics.lackOfCohesion4,
+            cohesionMetrics.lackOfCohesion5,
+        ].some((value) => value != null);
 
     return (
         <div className="bg-white/30 backdrop-blur-md rounded-2xl p-7 text-[15px] h-full flex flex-col overflow-y-auto">
@@ -65,7 +76,14 @@ const ProcessedClassInfoCard: React.FC<{ unit: ProcessedClassInstance | null }> 
                 {packageName && (
                     <div className="text-xs text-gray-500 break-all">{packageName}</div>
                 )}
-                <div className="text-[15px] font-semibold text-primary">{classLayerAnnotation}</div>
+                <div className="flex flex-wrap items-center gap-2 mt-1">
+                    <div className="text-[15px] font-semibold text-primary">{classLayerAnnotation}</div>
+                    {formattedFileType && (
+                        <span className="text-[11px] font-semibold uppercase tracking-wide px-2 py-0.5 rounded-full bg-swamp-100 text-swamp-800 border border-swamp-200">
+                            {formattedFileType}
+                        </span>
+                    )}
+                </div>
             </div>
 
             {/* Program Metrics */}
@@ -122,22 +140,28 @@ const ProcessedClassInfoCard: React.FC<{ unit: ProcessedClassInstance | null }> 
             {/* Cohesion */}
             <div className="mb-5 pb-2 border-b border-gray-border">
                 <div className="text-primary font-semibold text-xs mb-2 tracking-wide">Cohesion</div>
-                <div className="grid grid-cols-2 gap-x-6 gap-y-1">
-                    <LabelWithTooltip label="LCOM1:" description={metricDescriptions.lackOfCohesion1} />
-                    <div className="font-medium">{cohesionMetrics.lackOfCohesion1 ?? 0}</div>
-                    <LabelWithTooltip label="LCOM2:" description={metricDescriptions.lackOfCohesion2} />
-                    <div className="font-medium">{cohesionMetrics.lackOfCohesion2 ?? 0}</div>
-                    <LabelWithTooltip label="LCOM3:" description={metricDescriptions.lackOfCohesion3} />
-                    <div className="font-medium">{cohesionMetrics.lackOfCohesion3 ?? 0}</div>
-                    <LabelWithTooltip label="LCOM4:" description={metricDescriptions.lackOfCohesion4} />
-                    <div className="font-medium">{cohesionMetrics.lackOfCohesion4 ?? 0}</div>
-                    <LabelWithTooltip label="LCOM5:" description={metricDescriptions.lackOfCohesion5} />
-                    <div className="font-medium">
-                        {typeof cohesionMetrics.lackOfCohesion5 === "number"
-                            ? cohesionMetrics.lackOfCohesion5.toFixed(3)
-                            : "0.000"}
+                {hasCohesionMetrics ? (
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-1">
+                        <LabelWithTooltip label="LCOM1:" description={metricDescriptions.lackOfCohesion1} />
+                        <div className="font-medium">{cohesionMetrics.lackOfCohesion1 ?? "N/A"}</div>
+                        <LabelWithTooltip label="LCOM2:" description={metricDescriptions.lackOfCohesion2} />
+                        <div className="font-medium">{cohesionMetrics.lackOfCohesion2 ?? "N/A"}</div>
+                        <LabelWithTooltip label="LCOM3:" description={metricDescriptions.lackOfCohesion3} />
+                        <div className="font-medium">{cohesionMetrics.lackOfCohesion3 ?? "N/A"}</div>
+                        <LabelWithTooltip label="LCOM4:" description={metricDescriptions.lackOfCohesion4} />
+                        <div className="font-medium">{cohesionMetrics.lackOfCohesion4 ?? "N/A"}</div>
+                        <LabelWithTooltip label="LCOM5:" description={metricDescriptions.lackOfCohesion5} />
+                        <div className="font-medium">
+                            {typeof cohesionMetrics.lackOfCohesion5 === "number"
+                                ? cohesionMetrics.lackOfCohesion5.toFixed(3)
+                                : "N/A"}
+                        </div>
                     </div>
-                </div>
+                ) : (
+                    <div className="text-sm text-gray-500 italic">
+                        N/A (not applicable for this type)
+                    </div>
+                )}
             </div>
 
             {/* Dependencies */}

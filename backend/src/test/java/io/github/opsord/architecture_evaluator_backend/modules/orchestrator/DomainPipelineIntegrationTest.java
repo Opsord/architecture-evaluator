@@ -165,6 +165,27 @@ class DomainPipelineIntegrationTest {
                 }
                 """);
 
+        // 4b. Unannotated Spring Data repository + custom exception
+        write(base.resolve("repo/AuditRepository.java"), """
+                package com.acme.shop.repo;
+                import com.acme.shop.entity.User;
+                import org.springframework.data.repository.ListCrudRepository;
+
+                public interface AuditRepository extends ListCrudRepository<User, Long> {
+                    long countByName(String name);
+                }
+                """);
+
+        write(base.resolve("exception/ShopNotFoundException.java"), """
+                package com.acme.shop.exception;
+
+                public class ShopNotFoundException extends RuntimeException {
+                    public ShopNotFoundException(String message) {
+                        super(message);
+                    }
+                }
+                """);
+
         // 5. Service using wildcard import, static import, nested type, static logger, static factory,
         //    real field accesses, lambda & for-each shadowing (for (String items : items)),
         //    this::helper (isolated LCOM4 link), switch expr + when guard, try/catch/throw
@@ -248,14 +269,39 @@ class DomainPipelineIntegrationTest {
                 .findFirst()
                 .orElseThrow();
         assertEquals(JavaFileType.RECORD, dtoUser.getClassInstance().getJavaFileType());
+        assertNull(dtoUser.getClassAnalysisInstance().getCohesionMetrics());
         assertEquals(List.of("com.acme.shop.service.UserService"), dtoUser.getClassInstance().getDependentClasses());
 
-        // Repository depends on entity.User (not dto.User!)
-        assertEquals(1, result.getRepositories().size());
-        ProcessedClassInstance userRepo = result.getRepositories().get(0);
+        // Repositories: UserRepository (@Repository) + AuditRepository (Spring Data heuristic)
+        assertEquals(2, result.getRepositories().size());
+        ProcessedClassInstance userRepo = result.getRepositories().stream()
+                .filter(p -> "com.acme.shop.repo.UserRepository".equals(p.getClassInstance().getQualifiedName()))
+                .findFirst()
+                .orElseThrow();
         assertEquals(LayerAnnotation.REPOSITORY, userRepo.getClassInstance().getLayerAnnotation());
         assertEquals(List.of("com.acme.shop.entity.User"), userRepo.getClassInstance().getClassDependencies());
         assertEquals(List.of("com.acme.shop.service.UserService"), userRepo.getClassInstance().getDependentClasses());
+        assertNull(userRepo.getClassAnalysisInstance().getCohesionMetrics());
+        assertEquals(0, userRepo.getClassAnalysisInstance().getComplexityMetrics().getApproxMcCabeCC());
+        assertEquals(0, userRepo.getClassAnalysisInstance().getComplexityMetrics().getMaxMethodMcCabeCC());
+        assertEquals(0.0, userRepo.getClassAnalysisInstance().getComplexityMetrics().getImprovedCC());
+
+        ProcessedClassInstance auditRepo = result.getRepositories().stream()
+                .filter(p -> "com.acme.shop.repo.AuditRepository".equals(p.getClassInstance().getQualifiedName()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(LayerAnnotation.REPOSITORY, auditRepo.getClassInstance().getLayerAnnotation());
+        assertEquals(JavaFileType.INTERFACE, auditRepo.getClassInstance().getJavaFileType());
+        assertNull(auditRepo.getClassAnalysisInstance().getCohesionMetrics());
+        assertEquals(0, auditRepo.getClassAnalysisInstance().getComplexityMetrics().getApproxMcCabeCC());
+
+        // Custom exception detected as JavaFileType.EXCEPTION without cohesion
+        ProcessedClassInstance customEx = result.getOtherClasses().stream()
+                .filter(p -> "com.acme.shop.exception.ShopNotFoundException".equals(p.getClassInstance().getQualifiedName()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(JavaFileType.EXCEPTION, customEx.getClassInstance().getJavaFileType());
+        assertNull(customEx.getClassAnalysisInstance().getCohesionMetrics());
 
         // Abstract base class detected
         ProcessedClassInstance baseService = result.getOtherClasses().stream()

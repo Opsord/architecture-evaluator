@@ -183,4 +183,32 @@ class MethodVisitorTest {
                 .count();
         assertEquals(0, instanceAccesses);
     }
+
+    @Test
+    void testHasBodyPopulatedAndSerializedForInterfaceAndConcreteMethods() throws Exception {
+        String source = """
+            interface SampleRepo {
+                String findById(Long id);
+                default String findOrDefault(Long id) {
+                    return "none";
+                }
+            }
+            """;
+        CompilationUnit cu = StaticJavaParser.parse(source);
+        ClassOrInterfaceDeclaration iface = cu.getInterfaceByName("SampleRepo").orElseThrow();
+
+        List<MethodInstance> methods = new ArrayList<>();
+        MethodVisitor visitor = new MethodVisitor(new StatementService());
+        iface.accept(visitor, methods);
+
+        assertEquals(2, methods.size());
+        assertFalse(methods.get(0).getBasicInfo().isHasBody());
+        assertTrue(methods.get(1).getBasicInfo().isHasBody());
+
+        var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
+        String bodylessJson = mapper.writeValueAsString(methods.get(0).getBasicInfo());
+        String defaultJson = mapper.writeValueAsString(methods.get(1).getBasicInfo());
+        assertTrue(bodylessJson.contains("\"hasBody\":false"), "Expected hasBody:false, got: " + bodylessJson);
+        assertTrue(defaultJson.contains("\"hasBody\":true"), "Expected hasBody:true, got: " + defaultJson);
+    }
 }

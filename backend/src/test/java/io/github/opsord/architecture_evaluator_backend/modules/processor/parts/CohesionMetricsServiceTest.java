@@ -1,6 +1,7 @@
 package io.github.opsord.architecture_evaluator_backend.modules.processor.parts;
 
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.ClassInstance;
+import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.JavaFileType;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.VariableInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.MethodInstance;
 import io.github.opsord.architecture_evaluator_backend.modules.api.parser.instances.class_instance.parts.method.parts.StatementsInfo;
@@ -200,5 +201,25 @@ class CohesionMetricsServiceTest {
         ClassInstance c = classInstance(Collections.emptyList(), List.of(caller, callee));
         CohesionMetricsDTO dto = service.calculateCohesionMetrics(c);
         assertEquals(1, dto.getLackOfCohesion4());
+    }
+
+    @Test
+    void testReturnsNullForUnsupportedJavaFileTypes() {
+        for (JavaFileType type : List.of(
+                JavaFileType.INTERFACE,
+                JavaFileType.ANNOTATION,
+                JavaFileType.ENUM,
+                JavaFileType.EXCEPTION,
+                JavaFileType.RECORD)) {
+            ClassInstance c = classInstance(Collections.emptyList(), List.of(method("m1"), method("m2")));
+            c.setJavaFileType(type);
+            assertNull(service.calculateCohesionMetrics(c), "Expected null cohesion for " + type);
+        }
+
+        for (JavaFileType type : List.of(JavaFileType.CLASS, JavaFileType.ABSTRACT_CLASS, JavaFileType.UNKNOWN)) {
+            ClassInstance c = classInstance(Collections.emptyList(), List.of(method("m1")));
+            c.setJavaFileType(type);
+            assertNotNull(service.calculateCohesionMetrics(c), "Expected non-null cohesion for " + type);
+        }
     }
 }

@@ -9,4 +9,6 @@ public class BasicInfo {
     private String returnType;
     @JsonProperty("isStatic")
     private boolean isStatic;
+    @JsonProperty("hasBody")
+    private boolean hasBody = true;
 }

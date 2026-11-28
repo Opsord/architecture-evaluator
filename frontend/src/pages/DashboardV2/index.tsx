@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useProjectContext } from "../../context/ProjectContext";
+import { useNavigation } from "../../context/NavigationContext";
+import { IS_DEMO_MODE } from "../../config/demo";
 import CompUnitsScene from "./components/canvas/CompUnitsScene.tsx";
 import ProcessedClassInfoCard from "./components/info/ProcessedClassInfoCard.tsx";
 import DashboardLegend from "./components/legend/DashboardLegend.tsx";
@@ -7,7 +9,8 @@ import CanvasNavigationTips from "./components/navigation/CanvasNavigationTips.t
 import type { ProcessedClassInstance } from "../../types/ProcessedClassInstance.ts";
 
 const DashboardV2: React.FC = () => {
-    const { projectData } = useProjectContext();
+    const { projectData, isLoadingInitialData, initialDataError, retryLoadInitialData } = useProjectContext();
+    const { setCurrentPage } = useNavigation();
     const [selectedCube, setSelectedCube] = useState<string | null>(null);
     const [selectedUnit, setSelectedUnit] = useState<ProcessedClassInstance | null>(null);
     const [vibrationEnabled, setVibrationEnabled] = useState(true);
@@ -26,15 +29,53 @@ const DashboardV2: React.FC = () => {
     );
 
     if (!projectData) {
+        if (isLoadingInitialData) {
+            return (
+                <div className="flex flex-1 items-center justify-center min-h-[60vh] text-gray-500">
+                    Loading sample project…
+                </div>
+            );
+        }
+
+        if (initialDataError) {
+            return (
+                <div className="flex flex-1 flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-4">
+                    <p className="text-gray-600">{initialDataError}</p>
+                    <button
+                        type="button"
+                        onClick={retryLoadInitialData}
+                        className="px-5 py-2.5 rounded-lg bg-primary text-white font-semibold hover:bg-primary-dark transition-colors"
+                    >
+                        Retry
+                    </button>
+                </div>
+            );
+        }
+
         return (
-            <div className="flex items-center justify-center h-screen text-gray-500">
+            <div className="flex flex-1 items-center justify-center min-h-[60vh] text-gray-500">
                 No data available. Please analyze a project first.
             </div>
         );
     }
 
     return (
-        <div className="flex-1 flex flex-col min-h-0 max-h-full h-full">
+        <div className="flex-1 flex flex-col min-h-0 max-h-full h-full gap-3">
+            {IS_DEMO_MODE && (
+                <div className="shrink-0 flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-white/90 border border-gray-border rounded-xl shadow-sm text-sm">
+                    <span className="text-gray-dark">
+                        <span className="font-semibold text-primary-dark">Sample Project:</span>{" "}
+                        {projectData.projectName} (Spring Boot demo dataset)
+                    </span>
+                    <button
+                        type="button"
+                        onClick={() => setCurrentPage('instructions')}
+                        className="text-primary-dark font-semibold hover:underline"
+                    >
+                        How to read metrics
+                    </button>
+                </div>
+            )}
             <div className="grid grid-cols-5 grid-rows-8 gap-4 flex-1 min-h-0 max-h-full">
                 {/* 1. Legend (Left sidebar) */}
                 <div className="row-span-8 bg-white rounded-xl shadow p-0 flex overflow-hidden">
